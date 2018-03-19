@@ -1,10 +1,15 @@
 // import a library to help create a component
 import React from 'react';
-import { Text, AppRegistry } from 'react-native';
+import { AppRegistry, View } from 'react-native';
+import Header from './src/components/Header';
+import AlbumList from './src/components/AlbumList';
 
 // create a component
 const App = () => (
-    <Text>Some Text</Text>
+    <View>
+        <Header headerText={'Albums'} />
+        <AlbumList />
+    </View>
 );
 
 // render component to devise
