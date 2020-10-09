@@ -41,3 +41,37 @@ Users tend to expect a modal to close when the user clicks outside of the modal 
 #### Semantic UI
 SemanticUI creates styling through a specific naming convention for html elements. 
 Regarding modals (https://semantic-ui.com/modules/modal.html), it can be tricky when refactoring and styling a modal to be reusable. For example, if we have a delete and cancel button and we must extract the button logic from the modal into the invoking component and then inject the buttons into the modal as props, it won't style as expected if you follow convention and create a function that returns the buttons wrapped in a div. Due to how jsx is transpiled by babel, a function can only return one html element, and consequently creating that extra div layer could throw off the styling. Rather, use a React Fragment; basically an invisible element that has no effect on the DOM.
+
+##### Real Time Messaging (RTMP) Server
+TCP-based protocol which maintains persistent connections and allows low-latency communication for streaming audio, video and data over the Internet, between a Flash player and a server. 
+
+Responsible for receiving different video streams and broadcasting them out to different users browsers.
+
+Data flow for live streaming:
+Streamer uses Open Broadcaster Software (OBS) => *sends streamId to* => RTMP
+API with list of streams currently broadcasting => *sends data to* => web app in viewer's browser for performs crud ops etc => *makes requests to get video feed with streamId* => RTMP
+
+**OBS** 
+- Scenes: a scene is a custom configuration that specifies the source of video and audio for your stream
+    - set up multiple scenes to specify different sources of video, audio and quality
+- Sources: the actual source of audio or video
+    - set display capture, tip: hit `command + f` to recenter picture with fullscreen
+    - set audio output capture
+    - requires recording permissions and is buggy on macOS 10.15 Catalina; app doesn't reliable request permissions, tried deleting `/Library/Application Support/obs-studio` and reinstalling app; eventually it made request after several restarts
+    - NB: output recording format defaulted to .mkv for which mac doesn't seem to have a default media player; 
+        - Warning: recordings saved to MP4/MOV will be unrecoverable if the file cannot be finalized (eg. as a result of BSODs, power loss, etc.). If you want to record multiple audio tracks consider using MKV and remux the recording to MP4/MOV after it is finished (File => Remux Recordings)
+        - https://medium.com/@tielqt/should-you-be-recording-to-mp4-with-obs-obs-mythbusters-fc8513851170
+        
+Set up client-side app to receive video streamed from OBS
+
+There are many formats used to [access the live stream](https://github.com/illuspas/Node-Media-Server#accessing-the-live-stream). For react, use the [flv.js](https://www.npmjs.com/package/flv.js#getting-started) package. A bit like axios, it queries a server to download a video stream and converts it to a file that's compatible with the HTML5 video player. Steps: 
+- import the flv library into package.json
+- create a video element
+- get a reference to said element
+- createPlayer, accepts an options object 
+    - type: flv
+    - url: includes stream key from streamer
+- pass ref to the video element from the player
+
+Avoid loading logic race conditions in the render method: attach the ref to the video player after the stream has loaded.
+MediaSource onSourceEnded: dont forget to `destroy()` the player when unmounting the component, or it will continue to query
