@@ -13,7 +13,9 @@ A downside to the BrowserRouter is that this makes it hard to do programmatic na
 
 To navigate to some crud based component with a specific object id, so as to edit or delete the correct record, we can either use a Selection Reducer to record what item in the list is being operated on, or preferably a URL-based selection (available with react-router-dom), where you put the ID of the item in the URL. The convention is basically RESTful routes, simply add an ':id' to the Route, i.e. /streams/edit/*:id*. This :variable is automatically added as a prop to the history object (history.match.params.variableName), which is automatically injected into each component of each Route. We then compare the component props to the list of items inside the redux state store and match the ids. To access the props within the component, use ownProps within the mapStateToProps function.
 
-With React-Router, each component needs to be designed to work in isolation, i.e. fetch its own data.
+Note that React-Router is greedy when it comes to path matching, and will show all possible matches. For example: `path: "/streams/new"` and `path: "/streams/:id"` will both match at `url: "/streams/new"`. Both components will be displayed. Make use of the react-router-dom *Switch*, which will only return the first match for any given path and only show one component.
+
+Each component needs to be designed to work in isolation, i.e. fetch its own data.
 
 ##### Reusable Components and displaying initial values with ReduxForm
 The reusable component, which receives custom props, is wrapped by reduxForm. Therefore, the component using the reusable component is passing props to reduxForm, not the reusable component itself. ReduxForm passese the props through, along with other special props like *initialValues*, which accepts an object and tries to match the keys passed in to those in the form, replacing the values. Don't include any properties that aren't being updated in the initialValues object.
