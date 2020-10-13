@@ -75,3 +75,26 @@ There are many formats used to [access the live stream](https://github.com/illus
 
 Avoid loading logic race conditions in the render method: attach the ref to the video player after the stream has loaded.
 MediaSource onSourceEnded: dont forget to `destroy()` the player when unmounting the component, or it will continue to query
+
+### Context React v16
+Props system gets data from parent component to *direct* child component, whereas Context system gets data from a parent component to *any* nested child component.
+Context Object (CO) acts as a data pipeline from parent to nested component.
+
+Two ways to get data **in** CO
+- set up *Default Value* when CO is created
+    - can use any valid javascript as default value, e.g. object with key/value pair, or array of numbers
+- inside the parent component, create a *Provider* component, which pushes data into CO
+    - not the same as Redux Provider, just same name
+    - wrap component that needs access with Context.Provider, assigning a *value prop*
+        - each separate use of the Context.Provider creates a new, separate *pipe* of information
+Two ways to get data **out** of CO
+- reference `this.context` property inside of nested child
+    - To hook up context object to component, use `static contextType = contextName` to add contextType to component class
+- inside the nested child, link up *Consumer* component, similar to provider
+    - created automatically when new context object is created
+    - when using a consumer, don't need a contextType, which is only required when we want data to be assigned to `this.context` prop
+    - when placing a consumer, we give it one child, a function, which will automatically be called with whatever current value is inside the context object
+        - use Consumer any time you want to get data out of multiple different context objects, inside of a single component
+        - this.context is only used when we want a single context object in a component 
+
+Create a context directory, like components directory, for context files: create and export a custom context object for a given piece of state, import object into the relevant component files that need access to that piece of state.
