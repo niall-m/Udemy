@@ -87,6 +87,7 @@ Two ways to get data **in** CO
     - not the same as Redux Provider, just same name
     - wrap component that needs access with Context.Provider, assigning a *value prop*
         - each separate use of the Context.Provider creates a new, separate *pipe* of information
+        - only the components that get wrapped by the Provider will have access to the Context it implements, via props.children
 Two ways to get data **out** of CO
 - reference `this.context` property inside of nested child
     - To hook up context object to component, use `static contextType = contextName` to add contextType to component class
@@ -98,3 +99,27 @@ Two ways to get data **out** of CO
         - this.context is only used when we want a single context object in a component 
 
 Create a context directory, like components directory, for context files: create and export a custom context object for a given piece of state, import object into the relevant component files that need access to that piece of state.
+
+**pros n cons**
+- redux
+    - distributes data to various components
+    - centralizes data in a store
+    - provides mechanisms for changing data in store
+    - great docs
+    - established design patterns
+    - tons of open source libs
+- context
+    - distributes data to various components
+    - no need for extra libs
+    - hard to build store components for multiple concerns
+        - separate store components for each piece of state in the app
+            - currently too complicated to share data between those stores
+
+
+If we want to use Context instead of Redux, we need to be able to:
+1. get data to any component in hierarchy (not an issue)
+2. separate view logic from business logic
+3. split up business logic
+    - 2 and 3 are easy with redux, just sayin'
+
+One way would be to create your own store component, contain all business logic in a single source of truth, implement a provider to share that data to children components, and pass a callback to so the child can edit that data
