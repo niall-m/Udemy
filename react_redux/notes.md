@@ -1,9 +1,80 @@
 # Random Notes and Thoughts On React v16 & Redux
 
-#### Navigation with React Router
+## Simple Cycle
+React app *user clicks something* => action creator *produces* => action *gets dispatched, goes through* => middleware *passes action to* => reducers *produces* => state *flows back into* => React app
 
-React Router has three router types: BrowserRouter, HashRouter, MemoryRouter
-use HashRouter with Github pages, expects request to defined resource
+## Functional vs Class Components
+Until the hooks system, we could only use functional components to produce JSX for the user. Hooks introduces the lifecycle and state functionalities to functional components, basically bringing it up to par with class-based components. They're now functionally equivalent.
+- Class
+    - easier to organize code
+    - can introduce complexity with manual configuration of constructor and lifecycle methods
+    - rules: 
+        - must be a JS Class
+        - must *extend* (subclass) React.Component 
+        - must define a `render()` method that returns JSX
+            - don't need to define constructor function, as babel will do it anyways
+            - this.props
+- Functional
+    - easier/faster to implement
+    - not supported in legacy react apps
+    - just `props`
+
+## Hooks
+- primitive hooks
+    - useState
+        - returns an array with 2 elements: a piece of state, and a function to change it
+        - define getter and setter with array destructuring and an initial value for state
+            - `const [index, setIndex] = useState(null);`
+    - useEffect
+        - allows function components to basically use lifecycle methods
+        - configure hook to run some code automatically in 3 scenarios:
+            - run at **initial render only**
+                - useEffect(() => {}, [])
+            - run at initial render **and after every rerender**
+                - useEffect(() => {})
+            - run at initial render **and after every rerender *if* data has changed since last render**
+                - useEffect(() => {}, [data])
+        - built in cleanup function
+            - only one possible value we're allowed to return from useEffect: another function
+            - this function is invoked first whenever the useEffect hook is called again
+        - not allowed to mark function being passed to useEffect with async/await
+            - create inner helper function or IFFE and mark that as async
+            - or just use normal promises, .then 
+    - useRef
+        - `<div ref={ref}>`
+        - after component is first rendered , get access with `ref.current`
+        - `if (ref.current.contains(event.target))`
+    - useContext
+    - useReducer
+    - useCallback
+    - useMemo
+    - useImperativeHandle
+    - useLayoutEffect
+    - useDebugValue
+- custom hooks
+    - created by extracting hook-related code out of a function component
+    - makes use of at least one primitive hook
+    - should have one purpose
+
+## Refs
+Reference, gives access to a single DOM element, `<ref>.current`. In classes, create refs in the constructor, assign them to instance variables, pass to JSX element as props
+Add event listener to get html info `this.imageRef.current.addEventListener('load', callback);`
+
+NB: event listeners added directly onto the dom `document.body.addEventListener('onClick', etc)` will be invoked before any react component onClick handlers
+
+## Navigation with React Router
+Router tells react which part of the url to consider when decided which components to render to the screen.
+- change URL without triggering a page refresh
+- manipulates history with window.history.pushState()
+    - `window.dispatchEvent(new PopStateEvent('popstate'));`
+    - `window.addEventListener('popstate', awesomeCallback);`
+- three router types: 
+    - BrowserRouter => example.com **/users**
+        - pretty urls
+    - HashRouter => example.com **/#**/users
+        - good for github pages, expects request to defined resource
+        - or if working off an existing server with a lot of existing routes, and you want to throw a react app on it 
+    - MemoryRouter
 
 *When to navigate users*  
 *Intentional nav* where a user clinks on a link vs *Programmatic Nav* where we run code to force redirection, like after clicking a button to submit a form. It's bad form to redirect without doing an error/success status check on API requests.
@@ -13,14 +84,77 @@ A downside to the BrowserRouter is that this makes it hard to do programmatic na
 
 To navigate to some crud based component with a specific object id, so as to edit or delete the correct record, we can either use a Selection Reducer to record what item in the list is being operated on, or preferably a URL-based selection (available with react-router-dom), where you put the ID of the item in the URL. The convention is basically RESTful routes, simply add an ':id' to the Route, i.e. /streams/edit/*:id*. This :variable is automatically added as a prop to the history object (history.match.params.variableName), which is automatically injected into each component of each Route. We then compare the component props to the list of items inside the redux state store and match the ids. To access the props within the component, use ownProps within the mapStateToProps function.
 
-Note that React-Router is greedy when it comes to path matching, and will show all possible matches. For example: `path: "/streams/new"` and `path: "/streams/:id"` will both match at `url: "/streams/new"`. Both components will be displayed. Make use of the react-router-dom *Switch*, which will only return the first match for any given path and only show one component.
+Note that React-Router is greedy when it comes to path matching, and will show all possible matches. For example: `path: "/streams/new"` and `path: "/streams/:id"` will both match at `url: "/streams/new"`. Both components will be displayed. Make use of the react-router-dom *Switch*, which (like *express*) will only return the first match for any given path and only show one component
 
 Each component needs to be designed to work in isolation, i.e. fetch its own data.
 
-##### Reusable Components and displaying initial values with ReduxForm
-The reusable component, which receives custom props, is wrapped by reduxForm. Therefore, the component using the reusable component is passing props to reduxForm, not the reusable component itself. ReduxForm passese the props through, along with other special props like *initialValues*, which accepts an object and tries to match the keys passed in to those in the form, replacing the values. Don't include any properties that aren't being updated in the initialValues object.
+## actions and reducers
+- actions
+    - must return a plain js object
+    - must have a property called `type`
+- reducers 
+    - cannot return the same state object in memory, [or it will assume no change was made](https://github.com/reduxjs/redux/blob/master/src/combineReducers.ts#L207)
+    - cannot return undefined 
+    - must be pure: cant reach outside of itself, e.g. api call
+        - only considers previous state data and action
+    - state.filter, state.map, [ ...state, element], { ...state, property: value }
 
-#### Restful Conventions
+react and redux are connected by react-redux, with Provider and Connect
+
+meh. not gonna bother going into noob details about redux cycle and term definitions
+
+## general data loading with redux and thunk
+- components are generally responsible for fetching data they need by calling an action creator
+- action creators are responsible for making API requests
+    - using async/await within action creator can return unexpected objects, using a promise can create race conditions, use middleware instead
+        - babel transpiler creates switch statement that returns request object, not the action
+        - with synchronous action creator, it causes us to return request object instead of action
+- get fetched data into component by generating new state in redux store with reducer, connecting component with mapStateToProps
+- thunk
+    - allows the return of functions from action creators
+    - allows async/await in action creators with no problem
+    - if you return function, thunk will invoke it automatically with `dispatch` and `getState` as arguments
+    - ignores objects, sends them through to reducers
+
+            return ({ dispatch, getState }) => next => action => {
+                if (typeof action === 'function') {
+                    return action(dispatch, getState, extraArgument);
+                }
+                return next(action);
+            }
+
+## ReduxForm
+
+Reusable Components and displaying initial values. 
+The reusable component, which receives custom props, is wrapped by reduxForm. Therefore, the component using the reusable component is passing props to reduxForm, not the reusable component itself. ReduxForm passese the props through, along with other special props like *initialValues*, which accepts an object and tries to match the keys passed in to those in the form, replacing the values. Don't include any properties that aren't being updated in the initialValues object.
+- automatically creates its own reducers
+- wrap component with `reduxForm`, exactly like redux Connect function
+    - injects tons of props
+- `<Field component={this.renderInput}>`
+    - injects arguments into `renderInput`
+        - need to manually wire up value and eventHandler 
+        - `return <input {...formProps.input} />`
+            - takes all key-value pairs in formProps.input and adds them as props to the input element
+            - customize `renderInput` by adding additional props to field element  
+                - any unrecognized props will be automatically passed to `renderInput`
+- must call `handleSubmit` from reduxForm to submit
+    - `<form onSubmit={this.props.handleSubmit(this.onSubmit)}>`
+    - automatically invoked with whatever arguments are in the inputs
+    - automatically calls `event.preventDefault();`
+- `validate`
+    - function is called any time you interact with the form
+    - hook up to reduxForm wrapper
+    - automatically called with formValues object
+    - must return object
+        - valid = empty object
+        - invalid -> return object with NAME of the field as key, error message as value
+            - automatically matches names in error object to Field
+            - passes error message to renderInput function for corresponding Field
+                - `meta.error` property
+                - conditional rendering with `meta.touched`
+
+        
+## Restful Conventions
 Actions - Methods - Routes - Responses
 List All Records - GET - /rootPath - Array of Records
 Get one particular record - GET - /rootPath/:id - Single Record
@@ -31,18 +165,18 @@ Delete record - DELETE - /rootPath/:id - Nothing
 
 Put/Patch have conflicting results with different API implementations, all vs some rule is sometimes ignored.
 
-#### Modals with React Portals
+## Modals with React Portals
 In React, all elements are nested inside the 'root' html element. The modal component is typically deeply nested. If it is nested within a div that has a relative styling position *and* a z-index with any defined value, this creates a *Stacking Context*. A bit of a gotcha, it can create problems/unexpected behavior with React modals, as the stacking context creates a new way of comparing sibling elements that have assigned z-index values; i.e. it compares the sibling component's z-index to the modal's *relatively positioned parent element's* z-index, rather than the z-index of the modal itself. You can't always change the parent's css in a complex app. The workaround provided by React Portals is to display the modal not as a direct child of the component, but instead as a child of some other element, e.g. the html body element. Common uses include modal windows, working with 3rd party libraries, or use react to render content in some 3rd party element, i.e. injecting a React component into some HTML that wasn't created by your react application; e.g. introducing react to a server-side rendered application, like a java, ruby on rails, or django app that renders HTML from the backend.
 
 The return statement from a Portal element is a little different than normal, in that it doesn't return typical jsx but instead invokes the ReactDOM createPortal method, which takes 2 arguments: the ReactNode children elements (jsx to be displayed) and a reference to the element in which we want to render the portal. However, we can't just simply target the html body, as the portal will replace all the content in the body. Instead, create a placeholder element in the body hook onto, similarly to the '#root' element.
 
 Users tend to expect a modal to close when the user clicks outside of the modal page. Inject a callback with the *onDismiss* prop on the modal and invoke it on the modal's root html element to trigger a redirect. However, clicking anywhere inside the modal will trigger that redirect via event propagation aka bubbling, so go vanilla and prevent event progagation in the child of the element that invokes the onDismiss callback to cancel the bubbles.
 
-#### Semantic UI
+## Semantic UI
 SemanticUI creates styling through a specific naming convention for html elements. 
 Regarding modals (https://semantic-ui.com/modules/modal.html), it can be tricky when refactoring and styling a modal to be reusable. For example, if we have a delete and cancel button and we must extract the button logic from the modal into the invoking component and then inject the buttons into the modal as props, it won't style as expected if you follow convention and create a function that returns the buttons wrapped in a div. Due to how jsx is transpiled by babel, a function can only return one html element, and consequently creating that extra div layer could throw off the styling. Rather, use a React Fragment; basically an invisible element that has no effect on the DOM.
 
-##### Real Time Messaging (RTMP) Server
+## Real Time Messaging (RTMP) Server
 TCP-based protocol which maintains persistent connections and allows low-latency communication for streaming audio, video and data over the Internet, between a Flash player and a server. 
 
 Responsible for receiving different video streams and broadcasting them out to different users browsers.
@@ -76,7 +210,7 @@ There are many formats used to [access the live stream](https://github.com/illus
 Avoid loading logic race conditions in the render method: attach the ref to the video player after the stream has loaded.
 MediaSource onSourceEnded: dont forget to `destroy()` the player when unmounting the component, or it will continue to query
 
-### Context React v16
+## Context React v16
 Props system gets data from parent component to *direct* child component, whereas Context system gets data from a parent component to *any* nested child component.
 Context Object (CO) acts as a data pipeline from parent to nested component.
 
@@ -123,3 +257,78 @@ If we want to use Context instead of Redux, we need to be able to:
     - 2 and 3 are easy with redux, just sayin'
 
 One way would be to create your own store component, contain all business logic in a single source of truth, implement a provider to share that data to children components, and pass a callback to so the child can edit that data
+
+## Redux Promise
+Action flows enters middleware => Does the action have a promise as a payload?
+- yes 
+    - stop action
+    - after promise resolves, create new action (same type, payload of resolved promise) and send to reducer
+- no
+    - let it go through to reducer
+
+## thunk
+vanilla redux expects action creator us to return an action, plain js object, but redux-thunk enables another return type, a plain function; this inner function takes *dispatch* as its argument
+
+### reselect
+use case for derived state, where the data we care about is a product of 2 different reducers
+last argument to createSelector is the function that has the selection logic, all others are slices of state
+
+## animations
+[ReactCSSTransitionGroup](https://github.com/reactjs/react-transition-group) is a component: import and render in component, passing it a list of items. Animates items as they are added and removed from the list, through class names
+- render component and define css class `<transition-name>-enter` for intial styling, i.e. fade-enter
+- after initial render, apply case `<transition-name>-enter-active` to apply a transition
+
+        import ReactCSSTransitionGroup from 'react-addons-css-transition-group';
+        
+        render() {
+            const transitionOptions = {
+                transitionName: "fade",
+                transitionEnterTimeout: 500,
+                transitionLeaveTimout: 500
+            };
+
+            return (
+                <ul className="list-group">
+                    <ReactCSSTransitionGroup {...transitionOptions}>
+                        {this.renderStuff()}
+                    </ReactCSSTransitionGroup>
+                <ul>
+            )
+        }
+
+- apply some css 
+
+        .fade-enter { 
+            transform: rotateX(90deg) rotateZ(90deg); 
+            opacity: 0;
+        }
+        .fade-enter-active { 
+            transform: rotateX(0deg) rotateZ(0deg)
+            opacity: 1.0;
+            transition: .5 ease-in all;
+        }
+        .fade-leave { opacity: 1.0 }
+        .fade-leave-active { 
+            opacity: 0;
+            transition: .5 ease-out all;
+        }
+
+
+## [_Lodash](https://lodash.com/)
+Going to the developer console at lodash site allows the loading of the lodash library. Here's some potentially useful helper methods
+- [`_.mapKeys(object, 'string')`](https://lodash.com/docs/4.17.15#mapKeys) - looks in each object for a property matching the string, returns new object with each match as the key and the object as the value. Good for object-based reducers
+    - list of posts with id's can be coerced into an object that can be indexed by the key
+    
+        `payload = { {id: 1, post}, {id: 2, post2 }, etc }`  
+        `payload = { 1: { id: 1, post }, 2: { id:2 post }}`
+- [`_.omit(object, [pathsToOmit])`](https://lodash.com/docs/4.17.15#omit)
+    - basically the delete function in reducer
+- `_.memoize` for overfetching api requests
+- `_.uniq`
+- `_.chain` 
+    - chain on additional functions
+        - won't execute steps until chaining on `.value()`
+
+## errors
+- Objects are not valid as a React child
+    - can render arrays, strings and numbers as text, but not objects.. they must reference a property within the object
