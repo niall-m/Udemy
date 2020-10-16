@@ -94,4 +94,15 @@ Example:
         - Arrange: initialize objects and set the value of the data that is passed to the method under test
         - Act: invoke the method under test with the arranged parameters
         - Assert: verify that the action of the method under test behaves as expected
+- file naming convention: lower case will export default a function, upper case will export default a class
 
+# Higher Order Components (HOC)
+- A React component made to help us reuse code
+- Component + HOC = *'enhanced'* or *'composed'* component
+    - e.g. `connect` function from react-redux, or restricting access to certain components with an auth HOC (src/components/requireAuth.js)
+- Steps
+    - write the logic you want to reuse into a component
+    - create a HOC file and add the HOC scaffold
+    - move the reusable logic into the HOC
+    - pass props/config/behavior through to child component
+        - multiple parents are passing props (history object from react-router, action creator from redux connect, etc) that will end up in custom HOC
