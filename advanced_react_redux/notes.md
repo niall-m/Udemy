@@ -106,3 +106,35 @@ Example:
     - move the reusable logic into the HOC
     - pass props/config/behavior through to child component
         - multiple parents are passing props (history object from react-router, action creator from redux connect, etc) that will end up in custom HOC
+
+# Middlewares
+- React-Redux Cycle Recap
+    - React => *component calls action creator*
+    - Action Creator => *function that returns an action object*
+    - Action => *object with type and payload property, dispatched/forwarded to middleware*
+    - **Middleware** => *processes then forwards action to reducer*
+        - functions that give ability to **log, modify or stop actions** en route to reducer
+    - Reducers => *produce new state*
+    - State => *sent to React component and triggers rerender*
+    - rinse and repeat
+- Middleware Stack; chaining together multiple middlewares in a linked list
+    - action is passed through each middleware in the chain
+        - if processed, middleware returns a new action
+            - new action gets *dispatched* from the beginning of the chain
+- series of functions (3 deep) that return each other
+    - 1st outer func is called with dispatch and getState as arguments
+    - 2nd func is called with the `next` argument, for forwarding 
+        - a reference to the *next middleware* on the chain
+    - 3rd func called with action object from action creator as argument
+
+Steps to recreate reduxPromise
+- check to see if action has a promise on its 'payload' property
+    - if it does
+        - wait for it to resolve
+        - create new action with resolved data
+        - dispatch it
+    - if it does not, send action to next middleware
+
+- [JSON Schema document creator](https://jsonschema.net/)
+- [tv4](https://github.com/geraintluff/tv4) tiny validator 4 takes json and a schema, compares the two for validation
+- [JSON Schema package](https://github.com/json-schema-org/json-schema-spec/) for validating documents
