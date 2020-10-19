@@ -138,3 +138,40 @@ Steps to recreate reduxPromise
 - [JSON Schema document creator](https://jsonschema.net/)
 - [tv4](https://github.com/geraintluff/tv4) tiny validator 4 takes json and a schema, compares the two for validation
 - [JSON Schema package](https://github.com/json-schema-org/json-schema-spec/) for validating documents
+
+# Server Setup Authentication
+React is server agnostic, only cares about receiving JSON. Basic cycle: server checks client credentials and sends back auth cookie/token hall-pass to be included in all future requests
+- Cookies introduce the concept of state to HTTP 
+    - automatically included on all requests
+    - unique to each domain, cannot be sent to different domains
+- Tokens
+    - have to wire up manually to Headers
+    - can be sent to any domain
+    - useful for distributed system hosted on several servers, on several domains
+
+Best practices
+- scalability
+    - setup content server for index.html + bundle.js static files
+    - setup separate API server for all authenticated data flows
+        - allows load distributing for api calls, decouples api calls from react app
+- keep route handlers outside main index.js file
+    - to add route handlers to express, use REST methods: `.get()`, `.post`, etc
+        - `app.get('/route', function(request, response, next) { ...blah });`
+
+express: parse response + routing
+- [MongoDB](https://docs.mongodb.com/guides/)
+    - ([install with brew](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-os-x/index.html)), help installing [here](https://tinmankinetics.com/how-to-install-mongo-in-macos-linux-with-homebrew/)
+    - [shell stuff](https://docs.mongodb.com/manual/reference/program/mongo/) with `mongo` interactive shell
+    - mongoose: an [ORM](https://en.wikipedia.org/wiki/Object%E2%80%93relational_mapping) that works with MongoDB
+    - create models with custom validation properties, e.g. email/password/etc
+        - define model with `new Schema({ email: String })`
+        - create model class (used to create instances of model, e.g. new users)
+            - `mongoose.model('classname', schema);`
+        - export model
+- middleware
+    - morgan is a logging incoming request, used for debugging
+    - bodyParser parses any incoming requests into JSON
+    - nodemon for hot reloading, watches project directory for any file changes, restarts server with updates, wired up in package.json 
+- auth packages: passport, bcrypt
+
+Holding off until course is updated for mongodb 
