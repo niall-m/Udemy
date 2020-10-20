@@ -1,0 +1,88 @@
+REST-ful Routing
+
+Given a collection of records on a server, there should be a uniform URL and HTTP request method used to utilize that collection of records. [Set of conventions](https://restfulapi.net/) for CRUD operations, for setting up logical routes that represent the queries made and arguments expected at that route, e.g. `/users/23/friends`. These conventions tend to break down with deeply nested URL routes, which require highly customized queries against highly relational data.
+
+Some shortfall areas with restful routing:
+- heavily nested relationships
+- making too many requests with heavily nested stuff
+- over-fetching data
+
+GraphQL seeks to address these issues with its own queries. GraphQL can serve as a proxy of sorts, to fetch data from multiple sources and ship a response back to user.
+
+- using express, express-graphql, graphql
+    - GraphQL-express is the reference implementation of GraphQL
+        - official, maintained by facebook, probably safer in terms of big api changes
+- Setup express server to handle any incoming requests to route `/graphQL`
+    - `app.use('/graphql', graphqlHTTP({ graphiql: true }))`
+        - **graphiql** is a dev tool allowing us to make queries against dev server
+        - Error: GraphQL middleware options must contain a schema
+            - `app.use` is how we wire up middleware to an express app
+            - *schema file* describes to graphql how data is arranged and accessed
+                - what properties each object has and how each object is related
+
+Schema File
+
+- buncha functions that return references to other objects in our graph
+- each edge of the graph is basically a `resolve()` function (noted below)
+- operates off primary/foreign key associations, has many, etc
+- create type object variables with `new GraphQLObjectType`, 2 required parameters:
+    - name: always a string defining the 'type' we're creating
+    - fields: object, key = names of the properties, value = object with *type* property
+        - wrapped in specific graphQL types: e.g. `graphql.GraphQLString`, `new GraphQLList(CustomType)`
+        - associate other CustomTypes here, for directional restful relations
+            - e.g. `/users/21/companies` or `/companies/2/users`
+    - try to define types in order
+        - if you run into circular references js shenanigans
+            - wrap *fields* object in a fat arrow callback to create a closure scope
+            - makes a compile-time reference to object returned in *fields* parameter, gets invoked during execution phase, after both Types are defined
+        - treat associations between types as though they were another parameter in *fields* 
+    - requires a `resolve()` when incoming data model does not have matching parameter names in custom type object being returned
+- Root Query: another GraphQLObjectType that acts as the data entry point
+    - has name and fields
+    - `resolve()` executes the query, requires 2 arguments
+        - parentValue: rarely used
+        - args: called with whatever arguments were called with original query
+        - return JSON object that represents the data 'type' being returned
+        - the place for API calls, as graphQL automatically detects promises and waits for them to resolve
+    - new GraphQLSchema: takes in a root query(s) and returns a GraphQLSchema instance
+- graphiql: browser dev tool for testing queries
+    - queries are like javascript, makes use of the root query
+    - useful for saving queries into a named variable on frontend
+    - use different aliases on fields to fetch both, name result of query by assigning a key (cannot have duplicate keys on an object)
+        - `apple: company(id: "1") { ...companyDetails }, google: company(id: "2") { ...companyDetails }`
+    - query fragments to make a DRY list of properties
+        - `fragment companyDetails on Company { list, of, properties } => ...companyDetails`
+- Mutations object
+    - like Root Query, exported in the GraphQLSchema
+    - can send http requests, for crud ops on the db
+    - logic lives separate from Type that it aims to modify
+    - only difference is what we do in the `resolve()`
+    - the keys of the fields object describe the operation
+        - fields: { **addUser**: { type: ${type of data we will eventually return from resolve()} } }
+            - collection of data we're operating on and the type we return might not be the same
+        - args validation => wrap type with new GraphQlNonNull
+            - asserts that a value is being passed in, but nothing more
+    - slightly different syntax on graphiql, explicit
+        - `mutation { addUser(etc) { etc } }`
+    - when calling mutation with arguments, must ask for properties coming back from it (to match the *type* being returned from `resolve()`)
+        - always have to assert that there is a Type being returned, even if the properties are null, like an ID after a delete request
+        - `addUser(firstName: "Me", age: 30) { id, firstName, age }`
+- Clients   
+    - integrated to read data from GraphQL server
+        - query being sent from browser to server is unformatted (raw query string)
+            - graphiql request => network tab => XHR filter => Headers => Request Payload
+            - this makes GraphQL client agnostic: each request is processed the same no matter the client
+    - React app is coupled with client, which essentially replaces graphiql in production env
+        - hand write some queries, feed them into the client
+        - client issues request to backend, then passes response back to React app
+    - Lokka
+        - simple implementation; basic queries/mutations; basically graphiql with some simple caching
+    - Apollo Client (apollo stack)
+        - creators of MeteorJS; good balance between features/complexity
+        - has its own backend GraphQL server and frontend client
+        - breaks Types and Resolvers into their own files, enforces own syntax
+    - Relay 
+        - solid performance for mobile
+        - insanely complex, especially with mutations
+        - used by Facebook
+
