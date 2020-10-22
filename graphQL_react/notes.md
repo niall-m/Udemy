@@ -85,4 +85,27 @@ Schema File
         - solid performance for mobile
         - insanely complex, especially with mutations
         - used by Facebook
-
+- Apollo Stack
+    - 'apollo-client'; 'react-apollo';
+    - draws heavily from redux 
+    - Apollo Store, client side repository populated by GraphQL server
+        - `new ApolloClient({})`
+            - assumes GraphQL server is available on `/graphql` route
+                - `app.use('/graphql', expressGraphQL({ schema }));`
+    - Apollo Provider, react component, injects data from store into React app
+        - `<ApolloProvider client={client}>`, pass reference to store
+- GraphQL + React strategy
+    - identify specific data required
+    - write query in graphiql and in component file
+    - bond query + component with 'react-apollo'
+    - access data
+- Frontend
+    - `import gql from 'graphql-tag';` 
+        - helper library handles queries in react component files
+        - gql`{ query { etc } }` => defines a query
+    - `import { graphql } from 'react-apollo';`
+        - bonds like redux connect, or reduxForm HOC
+            - `export default graphql(query)(SongList);`
+        - when component is mounted, query is executed
+        - graphql nests results in `data` property on `props`, under key from query
+    - mapping over an array, have to sometimes overfetch and grab id's for react keys
