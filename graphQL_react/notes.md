@@ -1,4 +1,4 @@
-REST-ful Routing
+# REST-ful Routing
 
 Given a collection of records on a server, there should be a uniform URL and HTTP request method used to utilize that collection of records. [Set of conventions](https://restfulapi.net/) for CRUD operations, for setting up logical routes that represent the queries made and arguments expected at that route, e.g. `/users/23/friends`. These conventions tend to break down with deeply nested URL routes, which require highly customized queries against highly relational data.
 
@@ -20,7 +20,7 @@ GraphQL seeks to address these issues with its own queries. GraphQL can serve as
             - *schema file* describes to graphql how data is arranged and accessed
                 - what properties each object has and how each object is related
 
-Schema File
+# Schema File
 
 - buncha functions that return references to other objects in our graph
 - each edge of the graph is basically a `resolve()` function (noted below)
@@ -99,13 +99,56 @@ Schema File
     - write query in graphiql and in component file
     - bond query + component with 'react-apollo'
     - access data
-- Frontend
-    - `import gql from 'graphql-tag';` 
-        - helper library handles queries in react component files
-        - gql`{ query { etc } }` => defines a query
-    - `import { graphql } from 'react-apollo';`
-        - bonds like redux connect, or reduxForm HOC
-            - `export default graphql(query)(SongList);`
-        - when component is mounted, query is executed
-        - graphql nests results in `data` property on `props`, under key from query
+    
+
+# Frontend
+
+- `import gql from 'graphql-tag';` 
+    - helper library handles queries in react component files
+    - gql`{ query { etc } }` => defines a query
+- `import { graphql } from 'react-apollo';`
+    - bonds like redux connect, or reduxForm HOC
+        - `export default graphql(query)(SongList);`
+    - when component is mounted, query is executed
+    - graphql nests results in `data` property on `props`, under key from query
+        - changes a bit when wrapping a mutation => `props.mutate`
+- **query variables** for mutations
+    - provides data from react component class to gql query
+    - changes mutation syntax: add name, parameter and parameter type to mutation declaration
+        - named mutation, can be used as a function in app that takes customizable arguments
+        - `mutation AddSongFunc($title: String) { addSong(title: $title) { id, title }}`
+            - `mutation NameOfMutation($variableName: Type) { query(argumentName, $variableName) { properties returned } }`
+        - function is passed to component through `props.mutate`, which accepts a *query configuration object*
+        - arguments (query variables) are passed through *variables* property
+            - `this.props.mutate({ variables: { title: this.state.title } })`
+    - *props.mutate* returns a promise, which can help ensure user navigation only after a mutation has been successfully submitted to the server
+        - `.then(() => navigate n stuff).catch(() => handle validations n stuff)`
+            - also a good spot for loader logic
+- beware Apollo query caching, list fetching
+    - queries are executed when component mounts, but not if query was cached from previous mount
+    - example: ItemList component loads, executes query
+        - user navigates to CreateItem component; adds item to list; 
+            - user navigates back to ItemList component; item is not present in list
+    - need to manually refetch queries with Apollo
+        - add `refetchQueries` property to the mutate *query configuration object*
+            - accepts a list of objects (queries) that will be automatically rerun after mutation is successfully executed
+            - object takes 2 properties: *query* and *variables*
+        - or `this.props.data.refetch()`
+            - automatically refetches any queries associated with component
+        - use between the two methods depends on how the query is associated with the component
+- integrating 2 separate pieces of GraphQL code into a single component is tricky
+    - 'graphql' function is not setup to take multiple queries or mutations
+        - cannot double up on queries, although there's a workaround for mutations
+            - e.g. cannot do `export default graphql(query, mutation)(Component)`;
+        - instead, invoke `graphql()` helper *twice...*
+            - `graphql(mutation)(graphql(fetchSongsQuery)(SongList));`
+            - Apollo may have been updated at this point to handle this
+        
+- misc
     - mapping over an array, have to sometimes overfetch and grab id's for react keys
+    - Provider should wrap Router, keep Router as parent to Routes
+    - materialize's css assumes you're using a root component with className="container"
+    - forcible navigation inside a component with react-router: 
+        - withRouter HOC
+        - grab router off 'context' property
+        - grab router off 'props' object
