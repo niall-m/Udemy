@@ -114,16 +114,29 @@ GraphQL seeks to address these issues with its own queries. GraphQL can serve as
         - changes a bit when wrapping a mutation => `props.mutate`
 - **query variables** for mutations
     - provides data from react component class to gql query
-    - changes mutation syntax: add name, parameter and parameter type to mutation declaration
-        - named mutation, can be used as a function in app that takes customizable arguments
-        - `mutation AddSongFunc($title: String) { addSong(title: $title) { id, title }}`
+    - named mutation syntax
+        - add name, parameter and parameter type to mutation declaration
+        - can be used as a function in app that takes customizable arguments
+            - `mutation AddSongFunc($title: String) { addSong(title: $title) { id, title }}`
             - `mutation NameOfMutation($variableName: Type) { query(argumentName, $variableName) { properties returned } }`
-        - function is passed to component through `props.mutate`, which accepts a *query configuration object*
+            - basically same syntax for named queries
+            - add `!` to enforce validation
+                - `query SomeQuery($id: ID!)`
+    - function is passed to component through `props.mutate`, which accepts a *query configuration object*
         - arguments (query variables) are passed through *variables* property
             - `this.props.mutate({ variables: { title: this.state.title } })`
-    - *props.mutate* returns a promise, which can help ensure user navigation only after a mutation has been successfully submitted to the server
+    - `props.mutate` returns a promise
+        - can help ensure user navigation only after a mutation has been successfully submitted to the server
         - `.then(() => navigate n stuff).catch(() => handle validations n stuff)`
             - also a good spot for loader logic
+    - passing *query variables* to a *mutation* is very different from passing variables to a *query* 
+        - `this.props.mutate({ variables })` vs `export default graphql(query)(Component)`, respectively, for example
+        - remember, queries are executed automatically by GQL, but mutations are called invoked by dev
+        - Apollo provides an (extremely ugly) interface to inject vars into query (specifically, into graphql wrapper)
+            - graphql wrapper function accepts second argument: object with `options` property, return a callback
+            - NB: graphql has access to component `props`, which we pass as an argument to the options callback
+            - return `variables` object, similarly to calling mutation
+            - nest query variables in variables object: `variables: { id: props.params.id }`
 - beware Apollo query caching, list fetching
     - queries are executed when component mounts, but not if query was cached from previous mount
     - example: ItemList component loads, executes query
@@ -136,6 +149,16 @@ GraphQL seeks to address these issues with its own queries. GraphQL can serve as
         - or `this.props.data.refetch()`
             - automatically refetches any queries associated with component
         - use between the two methods depends on how the query is associated with the component
+- [Configuring the cache](https://www.apollographql.com/docs/react/caching/cache-configuration/)
+    - caching with DataIdFromObject
+    - when Apollo fetches data, it has no idea which piece of data is which
+    - `ApolloClient({ dataIdFromObject: o => o.id })` where o stands for object
+        - processes every piece of data that is fetched by Apollo client
+        - assigns id to that data in the store
+        - requires that every query returns some kind of unique id
+    - internally, causes Apollo client to associate data in store with id
+        - Provider communicates updates to store to React app, triggers rerender of any component using that id
+    - cuts down the number of api calls, rerender won't trigger refetch
 - integrating 2 separate pieces of GraphQL code into a single component is tricky
     - 'graphql' function is not setup to take multiple queries or mutations
         - cannot double up on queries, although there's a workaround for mutations
@@ -143,7 +166,10 @@ GraphQL seeks to address these issues with its own queries. GraphQL can serve as
         - instead, invoke `graphql()` helper *twice...*
             - `graphql(mutation)(graphql(fetchSongsQuery)(SongList));`
             - Apollo may have been updated at this point to handle this
-        
+- optimistic updates/responses
+    - guess at a response, use as placeholder for value until response comes back from server
+    - configured in mutation call
+        - must model exactly the HTTP/XHR request
 - misc
     - mapping over an array, have to sometimes overfetch and grab id's for react keys
     - Provider should wrap Router, keep Router as parent to Routes
