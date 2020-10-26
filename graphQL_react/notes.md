@@ -7,7 +7,7 @@ Some shortfall areas with restful routing:
 - making too many requests with heavily nested stuff
 - over-fetching data
 
-GraphQL seeks to address these issues with its own queries. GraphQL can serve as a proxy of sorts, to fetch data from multiple sources and ship a response back to user.
+GraphQL seeks to address these issues with its own queries. GraphQL can serve as a proxy of sorts, to fetch data from multiple sources and ship a response back to user. A thin abstraction layer over the business logic of the app.
 
 - using express, express-graphql, graphql
     - GraphQL-express is the reference implementation of GraphQL
@@ -37,6 +37,8 @@ GraphQL seeks to address these issues with its own queries. GraphQL can serve as
             - makes a compile-time reference to object returned in *fields* parameter, gets invoked during execution phase, after both Types are defined
         - treat associations between types as though they were another parameter in *fields* 
     - requires a `resolve()` when incoming data model does not have matching parameter names in custom type object being returned
+    - 3rd optional argument: `request` (sometimes called `context`)
+        - represents request object coming from express: what route they're trying to access, query string, request body, etc
 - Root Query: another GraphQLObjectType that acts as the data entry point
     - has name and fields
     - `resolve()` executes the query, requires 2 arguments
@@ -178,3 +180,7 @@ GraphQL seeks to address these issues with its own queries. GraphQL can serve as
         - withRouter HOC
         - grab router off 'context' property
         - grab router off 'props' object
+
+# Authentication
+- validate input, restrict user details 
+- Signup, Login and Logout are all changes to auth state, i.e. mutations
