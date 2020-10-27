@@ -182,5 +182,9 @@ GraphQL seeks to address these issues with its own queries. GraphQL can serve as
         - grab router off 'props' object
 
 # Authentication
-- validate input, restrict user details 
 - Signup, Login and Logout are all changes to auth state, i.e. mutations
+- pass cookies along to ApolloClient for auth 
+    - networkInterface => credentials: 'same-origin'
+    - tells apollo client to send cookies when making queries to backend server
+- res.graphQLErrors
+    - populated automatically by Apollo
