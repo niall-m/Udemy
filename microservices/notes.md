@@ -1,0 +1,26 @@
+- Monolith vs Microservice
+    - A monolith contains all the routing, middlewares, business logic, and database access required to implement *all features* of an app
+    - A single microservice contains all of that for *one feature* of an app. Everything is self contained.
+- The big problem of microservices is *data management between services*, due to how data is stored and accessed
+    - Each service gets its own db (*Database-per-Service*), and services *never* reach into the db of another service
+        - each service should be independent of other services
+        - db schema/structure might change
+        - some services might function more efficiently with different types of DB's (sql vs nosql)
+- communication strategies between services (not the same meaning as JS!)
+    - sync: services communicate with each other using *direct requests*
+        - conceptually easy to implement
+        - could circumnavigate the need for a db 
+            - if service C depends on data from services A & B, then C doesn't need a db
+        - introduces dependency between services
+        - if any inter-service request fails, the overall request fails
+        - the entire request is only as fast as the slowest request
+        - can introduce complicated webs of requests
+            - maybe services A & B also make requests to other services
+    - async (2 ways): services communicate eith each other using *events* in the *event bus*:
+        - each service emits events to the bus *when they need data*, other services process and return; like a reducer for all services
+            - shares all the downsides of sync, not very popular in the wild 
+        - services emit an event to event bus *whenever they make entries into their own db*, other services listening for that event type then add the entry to their respective db
+            - zero depedencies amongst services
+            - very fast, no need to navigate a web of requests
+            - data duplication; paying for extra storage (haha), extra db
+            - more complicated
