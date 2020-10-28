@@ -73,3 +73,18 @@
                         - query service picks up update event, updates comment
         - splits events into specialized/specific event (CommentModerated) and general event (CommentUpdated)
         - most modular approach: keeps comment business logic in the comment service
+- dealing with missing requests
+    - if a service goes down and an event missed out on being processed, like a deadletter queue
+    - if a new service was introduced, and never had the chance to process events
+    - Option #1: Sync Requests
+        - new service makes a direct network request to other services for all their db items
+        - not great: requires new code in other services to handle these requests
+    - Option #2: Direct DB access
+        - give new service direct access to the other services db's, bypass the services
+        - new service could make its own queries, but that requires potentially a lot of extra code
+            - maybe other services have different db types (postgres, mysql, mongo, dynamo, etc)
+    - Option #3: Store Events
+        - whenever any service emits any event to the event bus, bus stores each event in its own db
+        - a new service can request all events from the bus, and process them without any extra code
+        - if a service goes down, look at the last event received and request any that happened after to fill in the gap
+        - only downside is storage, but data storage is so cheap now that it doesn't matter
