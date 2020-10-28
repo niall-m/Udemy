@@ -7,7 +7,7 @@
         - db schema/structure might change
         - some services might function more efficiently with different types of DB's (sql vs nosql)
 - communication strategies between services (not the same meaning as JS!)
-    - sync: services communicate with each other using *direct requests*
+    - **sync**: services communicate with each other using *direct requests*
         - conceptually easy to implement
         - could circumnavigate the need for a db 
             - if service C depends on data from services A & B, then C doesn't need a db
@@ -16,7 +16,8 @@
         - the entire request is only as fast as the slowest request
         - can introduce complicated webs of requests
             - maybe services A & B also make requests to other services
-    - async (2 ways): services communicate eith each other using *events* in the *event bus*:
+    - **async** (2 ways): services communicate eith each other using *events* in the *event bus*:
+        - event broker: receives events, sends them to interested parties
         - each service emits events to the bus *when they need data*, other services process and return; like a reducer for all services
             - shares all the downsides of sync, not very popular in the wild 
         - services emit an event to event bus *whenever they make entries into their own db*, other services listening for that event type then add the entry to their respective db
@@ -24,3 +25,20 @@
             - very fast, no need to navigate a web of requests
             - data duplication; paying for extra storage (haha), extra db
             - more complicated
+- Cors requests (cross origin request sharing)
+    - common error with microservices 
+    - mechanism that allows restricted resources on a web page to be requested from another domain outside the domain from which the first resource was served
+    - browser will prevent request unless receiving server provides a specific set of headers 
+        - wire up the cors npm package in server as a middleware with `app.use(cors());`
+- API request minimization strategies
+    - react example: get all posts and their associated comments
+    - sync
+        - GET request to posts service, post service requests all comments from comments service, post service assembles and returns 
+    - async
+        - posts/comments services emit an event to event bus any time a post/comment is created
+        - query service assembles all posts/comments into an efficient data structure
+            - GET request goes to query service instead of posts
+- Event Bus
+    - several implementations: RabbitMQ, Kafka, NATS
+    - receives events, publishes them to listeners
+    - many different subtle features that make async communication easier or harder
