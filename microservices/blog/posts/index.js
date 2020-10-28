@@ -8,7 +8,6 @@ const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 
-// storing in memory
 const posts = {};
 
 app.get('/posts', (req, res) => {
@@ -28,7 +27,7 @@ app.post('/posts', async (req, res) => {
     data: {
       id, title
     }
-  })
+  });
 
   res.status(201).send(posts[id]);
 });
@@ -40,5 +39,5 @@ app.post('/events', (req, res) => {
 });
 
 app.listen(4000, () => {
-  console.log('Listening on 4000');
-})
+  console.log('Posts: Listening on 4000');
+});

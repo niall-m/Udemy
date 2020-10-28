@@ -42,3 +42,34 @@
     - several implementations: RabbitMQ, Kafka, NATS
     - receives events, publishes them to listeners
     - many different subtle features that make async communication easier or harder
+    - in Express, event is contained in the `req.body` property
+- Moderation (whether to approve or reject an action)
+    - extract moderation logic into its own service, not in react app (would require frequent redeploys)
+    - react app only needs to tell diff between pending, rejected and approved moderation
+    - Option #1: middleman approach: introduce moderation service, communicates event creation to query service 
+        - comments service emits event saying comment was created
+            - moderation service picks up event, processes comment, emits new event saying it was moderated
+                - query service persists comment
+        - can creates delays between user submitting comment and it being persisted by query service, especially if moderation is approved by hoomans
+            - the longer the wait, the worse the UX
+        - introduces irrelevent logic and overcomplication to query service as app grows in complexity
+    - Option #2: Moderation updates status at both comments and query services
+        - comments service emits event saying comment was created
+            - both moderation and query service pick up event
+                - query service persists immediately with default status of 'pending'
+                    - moderation service eventually processes it, emits new event saying it was moderated
+                        - query service updates status
+        - solves problem of delay (can display placeholder comment for UX)
+        - introduces irrelevent logic and overcomplication to query service as app grows in complexity
+            - query service is for presentation logic (storing posts and their comments together to avoid multiple API requests)
+            - maybe comment can be up/downvoted, promoted, searchable, advertised, etc., query service doesn't/shouldn't care!
+                - that business logic should live in the comment service
+    - Option #3: query service only listens for 'update' events
+        - user submits comment, comment service persists event *with status prop* (of pending) and emits event
+            - moderation and query services pick up the creation event
+                - moderation processes specialized update and emits event *back to comment service*
+                - query service persists comment immediately (with pending status) for UX placeholder
+                    - comment service updates status and emits update event
+                        - query service picks up update event, updates comment
+        - splits events into specialized/specific event (CommentModerated) and general event (CommentUpdated)
+        - most modular approach: keeps comment business logic in the comment service
