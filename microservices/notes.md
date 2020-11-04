@@ -88,3 +88,195 @@
         - a new service can request all events from the bus, and process them without any extra code
         - if a service goes down, look at the last event received and request any that happened after to fill in the gap
         - only downside is storage, but data storage is so cheap now that it doesn't matter
+- Deployment
+    - to deploy online we could rent a virtual machine from DigitalOcean, AWS, Azure, etc., and run the localhost setup there
+        - if one service gets overloaded, we could create duplicate instances on the same VM, behind a load balancer
+            - these copies would have to be allocated additional ports, which would have to be hardcoded in the event bus
+                - ties the number of services we're running with the code implementation => *lame*
+        - instantiating duplicate services on a second VM would be even more tedious
+            - still have to hardcode the ports *and* configure ip routing
+        - spinning up duplicate services for peak traffic hours would require hardcoding in the event bus too => *gross*
+    - need to:
+        - keep track of all the different services running
+        - have ability to create new copies of services on the fly
+        - automatically figure out if a service is running 
+        - whether to make contact between two services
+            - enter **docker** and **kubernetes**
+
+
+## Docker
+- containers: isolated computing environment, contains everything needed to run a program
+    - specific env setup and knowledge of how to start it; configured in container
+    - use a container for each service, and spin up duplicates easily
+    - 1:1 pairing to docker containers and each instance of the running program
+    - kernel isolates a section of necessary processes/resources (RAM, network, CPU, harddrive, etc) for container
+    - running process with a subset of physical resources that are specifically allocated to that process
+        - isolated by *namespacing*
+        - can limit amount of resources used per process with *control groups* (cgroups)
+            - namespacing and cgroups are specific to linux
+                - docker installs a Linux VM, inside which the containers are created
+                    - linux kernal hosts all the running processes in the containers
+- image
+    - file system snapshot
+    - startup command 
+- CLI 
+    - `docker run <image name>` = `docker create` + `docker start`
+        - include override (to ignore default startup command) with `docker run <image name> command`
+            - e.g. `docker run busybox ls` => lists out the file system structure within the image
+            - override command must exist within the image
+        - `docker create` preps the container file system
+        - `docker start -a <container id>`
+            - `-a` ('attach'?) makes docker watch for output from container and print to terminal
+            - by default, `run` will show all the logs from the container, `start` will not
+    - `docker ps`
+        - list all running containers
+        - modify command to show all containers that have ever been created on machine with `--all`
+        - useful to get the id of a running container
+    - `docker logs <container id>` to look at container and retrieve all info that has been emitted
+    - `docker stop <container id>` to stop a container
+        - hardware signal SIGTERM (terminate signal) is sent to primary process in that container to shut itself down
+            - gives time to save files or emit signals, etc
+        - if container doesn't automatically stop within 10 seconds, docker automatically issues the kill command
+    - `docker kill <container id>` to kill a container
+        - sends SIGKILL command to immediately shut down with no additional work
+            - useful if container froze, unresponsive
+    - `docker system prune`
+        - delete stopped container, all networks not used by at least one container, all dangling images, all build cache
+    - multi-command containers
+        - if we need to execute second command inside a running container, e.g. `redis-cli` to interact with redis instance running in container
+        - basically grants shell access to the container
+        - `docker exec -it <container id> <command>`
+            - `exec`: run another command
+            - `-it`: (interactive?) allow us to provide input to the container, actually 2 commands:
+                -  `-i`: attach terminal to STDIN (standard in) channel of that process
+                - `-t`: basically formats text with STDOUT
+                    - STDIN, STDOUT, STDERR from Linux kernal 
+            - `docker exec -it <container id> sh`
+                - `sh` is actually a program, executed in that container
+                    - command processor aka a shell, like zsh or bash
+                    - gives full terminal access inside the container, can run typical commands from the unix env
+                    - most containers have `sh` program already included
+    - `docker build <build context>` takes a Dockerfile and generates an image out of it
+        - tied to the Docker-CLI, for creating docker images
+        - context is the set of files and folders we want to encapsulate in the container
+        - *tagging an image*
+            - `docker build -t <your docker id>/<repo or project name>:<version> <directory to use for build>`
+                - `docker build -t myDockerId/redis:latest .`
+    - `docker commit` for manual image generation, but Dockerfile and build is more common
+- container lifecycler
+    - when you start a container that's already been created, cannot replace default command
+        - container will alway use original command from when container was first created
+- creating docker images
+    - create a Dockerfile, containing configuration to define container behavior
+    - pass file off to Docker Client (docker cli), which passes it to Docker Server, which builds usable image
+    - flow for creating a Dockerfile
+        - specify base image
+        - add config to run some commands to install additional programs/dependencies
+        - specify a command to run on container startup
+    - uses a cache behind the scenes to improve rebuild speed
+    - common commands in Dockerfile
+        - FROM: specify base image
+        - WORKDIR: set working directory in container; all commands will be issued relative to the directory
+        - COPY: copy over a file
+        - RUN: run a command
+        - CMD: set command to run when the container starts up
+
+## Kubernetes (aka K8s)
+- tool for running a bunch of containers in a *cluster*
+    - a cluster contains any number of VM's, each referred to as a node
+        - nodes managed by a *Master*, a program that manages everything in the cluster
+            - give it some config files to describe how we want our containers to run and interact with each other
+                - send requests to cluster, cluster automatically figures out how to route requests to appropriate service
+                - makes communication easy, e.g. between event bus node and service nodes
+                - makes scaling services easy
+            - kube looks locally first for images in config file, if not found, looks on Docker Hub
+            - creates containers with image, distributes the containers amongst nodes
+            - containers are hosted in a *pod*, inside the node
+            - to manage pods, kubectl creates a *deployment*
+                - reads config file for instructions
+                - automatically recreates pods if they fail
+            - kube creates a *service* to manage node-to-node communication 
+                - not a running program or server, gives access to running pods (or containers in the pods) inside cluster
+                - abstracts difficulty in handling networking amongst IP port routing
+                - great for microservice event bus; pod will reach out to *service* in order to contact another pod
+- kubernetes cluster
+    - a collection of nodes + a master to manage them
+- node
+    - a virtual machine that runs containers
+- pod
+    - more or less a running container; technically a pod can run multiple containers
+    - if you create a pod without a version number, docker tags it as *latest*
+        - k will default search k hub for image if there's no version number; if not found, error!
+- deployment 
+    - monitor/manage a set of pods, make sure they are running and restarts them if they crash
+    - useful for versioning, takes care of updates automatically
+    - `apiVersion: apps/v1` => deployment lives in apps bucket
+    - `replicas: 1` => number of pods we want to create, running some image
+    - `selector` tells deployment which pods its supposed to manage
+    - `template` where we specify exact config of a pod we want deployment to create
+- service
+    - provides an easy-to-remember URL to access a running container
+- config files
+    - tells kubernetes about the different Deployments, Pods and Services (referred to as "Objects") that we want to create
+    - written in YAML
+    - always store these files with project source code - free documentation!
+    - do not create Objects *without* config files
+        - you can run direct commands to create Objects on command line, only do this for testing
+- basic commands
+    - `kubectl get pods`
+        - print out info about all of the running pods
+    - `kubectl exec -it [pod_name] [cmd]`
+        - soon to be deprecated; use `kubectl exec [POD] -- [COMMAND]` instead
+        - execut the given command in a running pod
+    - `kubectl logs [pod_name`
+        - print out logs from the given pod
+    - `kubectl delete pod [pod_name]`
+        - deletes the given pod
+    - `kubectl apply -f [config file name]`
+        - tells k to process the config
+    - `kubectl describe pod [pod_name]`
+        - print out some info about the running pod
+- deployment commands
+    - `kubectl get deployments`
+        - list all running deployments
+    - `kubectl describe deployment [depl_name]`
+        - print out details about specific deployment
+    - `kubectl apply -f [config file name]`
+        - create a deployment out of a config file, 'apply' the config to a cluster
+    - `kubectl delete deployment [depl_name]`
+        - delete a deployment
+- updating deployments
+    - method #1: not used often professionally
+        - make change to project code
+        - rebuild image, specifying new image version
+        - in deploy config file, update image version
+            - introduces chance of error by having to manually update
+        - run command `kubectl apply -f [depl_file_name]`
+    - method #2: preferred
+        - deployment must be using *latest* tage in the pod spec section
+            - k8s will auto update deployment version if latest is updated
+        - make an update to your code
+        - build the image
+        - push the image to docker hub
+        - run command `kubectl rollout restart deployment [depl_name]`
+- Services
+    - another *object* like a pod or deployment, also created by config file
+    - used to set up communication between different pods, or access from outside the cluster
+    - types of services
+        - Cluster IP
+            - sets up an easy-to-remember URL to access a pod, only exposes pods *in the cluster*
+            - network different pods together
+        - Node Port
+            - makes a pod accessible from *outside the cluster*, usually used for dev purposes
+        - Load Balancer
+            - makes a pod accessible from *outside the cluster*, this is the right way to expose a pod to the outside world
+        - External Name
+            - redirects an in-cluster request to a CNAME url
+    - *spec selector*, choose which pods to expose, matches pods by their *label* like css class names
+    - port vs targetPort
+        - port attached to the container, e.g. express app.listen(4000), is the *targetPort*
+        - port attached to the service, which interacts with browser, is the *port*
+        - usually just keep them the same 
+    - nodePort => randomly assigned port between 30000-32767
+        - access from outside world to the node service, for dev purposes
+        - `localhost:3xxxx/<pod name>` 
