@@ -253,13 +253,36 @@
         - in deploy config file, update image version
             - introduces chance of error by having to manually update
         - run command `kubectl apply -f [depl_file_name]`
-    - method #2: preferred
+    - method #2: preferred process for dev env
         - deployment must be using *latest* tage in the pod spec section
             - k8s will auto update deployment version if latest is updated
         - make an update to your code
         - build the image
         - push the image to docker hub
         - run command `kubectl rollout restart deployment [depl_name]`
+    - or just use *Skaffold* to automate method 2
+        - automates many tasks in k8s dev env
+        - easy updates for code in a *running pod*
+        - easy to create/delete all objects tied to a project
+        - [skaffold.dev](https://skaffold.dev/)
+            - config runs outside of our cluster, not consumed by k8s2
+            - anytime a change is made in targeted *manifests*, skaffold reapplies it to cluster
+                - also applies all deployments when skaffold starts
+                - also deletes all related objects when skaffold is stopped
+            - by default, whenever an image is rebuilt, it will try to push it to docker hub
+            - `artifacts` designates something in project that needs to be maintained (`context`)
+                - whenever something changes in that directory (`src`), it will attempt to update pod (`dest`)
+                - if a file doesn't match source, skaffold tries to rebuild image and update deployment
+                    - e.g. adding new dependency
+                    - basically update in place or rebuild entire image
+            - `skaffold dev` only command you need! 
+            - automatically outputs logs to terminal
+            - NB: need automated restarting/change detections in app
+                - even if skaffold updates a file in the pod, it won't restart the primary process of the pod
+                    - need something inside pod that will automatically restart the process
+                        - anytime create-react-app sees a file change, rebuilds react app and refreshes browser
+                        - nodemon watches the server files and restarts on change as well
+            - sometimes has challenges detecting file changes inside containers
 - Services
     - another *object* like a pod or deployment, also created by config file
     - used to set up communication between different pods, or access from outside the cluster
@@ -315,7 +338,7 @@ Integrating React App into K Cluster with load balancer service
             - requires a config file containing router rules
             - ingress controller scans all the objects in our cluster for one with `annotations` metadata prop containing `kubernetes.io/ingress.class: "nginx"` 
                 - this signifies it contains all the routing rules
-            - concerning local development:
+            - [concerning local development](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/):
                 - yaml line `- host: <domain.com>` require a tweak to Host File `/etc/hosts`
                     - need sudo access, add domain to k8s ip, e.g. `127.0.0.1 <domain_name>.com`
                 - tricks nginx to think we're coming to it from a specific domain instead of localhost
