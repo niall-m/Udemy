@@ -234,6 +234,7 @@
         - deletes the given pod
     - `kubectl apply -f [config file name]`
         - tells k to process the config
+        - apply multiple config files with `kubectl apply -f .` for all in directory
     - `kubectl describe pod [pod_name]`
         - print out some info about the running pod
 - deployment commands
@@ -266,6 +267,7 @@
         - Cluster IP
             - sets up an easy-to-remember URL to access a pod, only exposes pods *in the cluster*
             - network different pods together
+            - make a request to url with `http://<service_name>/<port>/someRoute `
         - Node Port
             - makes a pod accessible from *outside the cluster*, usually used for dev purposes
         - Load Balancer
@@ -280,3 +282,50 @@
     - nodePort => randomly assigned port between 30000-32767
         - access from outside world to the node service, for dev purposes
         - `localhost:3xxxx/<pod name>` 
+- to add multiple objects to a single yaml file, use `---` for linebreak
+- `type: ClusterIP` is optional as kube will default to clusterip
+
+Integrating React App into K Cluster with load balancer service 
+- React application is actually Create-React-App Dev server
+- house it in a container, in a pod
+    - create image of app and deploy to docker hub
+    - requires a deployment config to host inside cluster
+        - and a clusterIP so ingress nginx controller can direct traffic to pod
+- dev server initially serves up HTML/CSS/JS to the browser, and becomes irrelevant after initial request
+- After initiating, all requests for data from browser need to go to the components inside the k cluster pods
+    - for browser to reach out to pods, we have 2 options
+- option #1: no good!
+    - create a NodePort service for each pod, to expose it to the outside world
+        - Node Ports are creating with quasi random ports
+        - changing node ports would require updating ports in the react app code
+- option #2: 
+    - **load balancer service**
+        - one single point of entry to the cluster, which will route requests to appropriate cluster ip service
+        - tells k8s to reach out to its cloud provider (aws, gc, azure) and provision a load balancer, gets traffic in to a *single pod*
+            - load balancer exists outside our cluster, in the provider env
+                - directs outside traffic into pods
+    - **ingress or ingress controller**
+        - technically 2 different things but basically:
+            - a pod with a set of routing rules to distribute traffic to other services
+            - request comes into load balancer, which sends request to ingress controller
+            - based on request's path and ingress routing rules, sends request to correct pod
+                - (technically sends it to cluster ip service which then sends req to pod)
+        - [ingress-nginx](https://github.com/kubernetes/ingress-nginx) (different from *kubernetes ingress*)
+            - acts as the ingress controller
+            - requires a config file containing router rules
+            - ingress controller scans all the objects in our cluster for one with `annotations` metadata prop containing `kubernetes.io/ingress.class: "nginx"` 
+                - this signifies it contains all the routing rules
+            - concerning local development:
+                - yaml line `- host: <domain.com>` require a tweak to Host File `/etc/hosts`
+                    - need sudo access, add domain to k8s ip, e.g. `127.0.0.1 <domain_name>.com`
+                - tricks nginx to think we're coming to it from a specific domain instead of localhost
+            - gotchas
+                - cannot differentiate HTTP request methods for routing
+                    - e.g. POST and GET requests to the same route of /posts
+                    - requires fix to code, rebuild code, update deployment manually => gross
+                - cannot interpret wildcards in routes
+                    - `/posts/:id/comments` needs regex for :id
+                        - `/posts/?(.*)/comments`
+                        - requires addition to annotations
+                - for SPA react app using router, default path in `paths` (last path) use wildcard
+                    - matches any path to always show react app, like `/` in react router
