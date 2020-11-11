@@ -261,29 +261,11 @@
     - build the image
     - push the image to docker hub
     - run command `kubectl rollout restart deployment [depl_name]`
-  - or just use _Skaffold_ to automate method 2
+  - or just use _Skaffold_ to automate method 2 (see below)
+    - developed by Google Cloud team
     - automates many tasks in k8s dev env
     - easy updates for code in a _running pod_
     - easy to create/delete all objects tied to a project
-    - [skaffold.dev](https://skaffold.dev/)
-      - config runs outside of our cluster, not consumed by k8s2
-      - anytime a change is made in targeted _manifests_, skaffold reapplies it to cluster
-        - also applies all deployments when skaffold starts
-        - also deletes all related objects when skaffold is stopped
-      - by default, whenever an image is rebuilt, it will try to push it to docker hub
-      - `artifacts` designates something in project that needs to be maintained (`context`)
-        - whenever something changes in that directory (`src`), it will attempt to update pod (`dest`)
-        - if a file doesn't match source, skaffold tries to rebuild image and update deployment
-          - e.g. adding new dependency
-          - basically update in place or rebuild entire image
-      - `skaffold dev` only command you need!
-      - automatically outputs logs to terminal
-      - NB: need automated restarting/change detections in app
-        - even if skaffold updates a file in the pod, it won't restart the primary process of the pod
-          - need something inside pod that will automatically restart the process
-            - anytime create-react-app sees a file change, rebuilds react app and refreshes browser
-            - nodemon watches the server files and restarts on change as well
-      - sometimes has challenges detecting file changes inside containers
 - Services
   - another _object_ like a pod or deployment, also created by config file
   - used to set up communication between different pods, or access from outside the cluster
@@ -324,6 +306,7 @@ Integrating React App into K Cluster with load balancer service
     - Node Ports are creating with quasi random ports
     - changing node ports would require updating ports in the react app code
 - option #2:
+
   - **load balancer service**
     - one single point of entry to the cluster, which will route requests to appropriate cluster ip service
     - tells k8s to reach out to its cloud provider (aws, gc, azure) and provision a load balancer, gets traffic in to a _single pod_
@@ -359,6 +342,69 @@ Integrating React App into K Cluster with load balancer service
             - requires addition to annotations
         - for SPA react app using router, default path in `paths` (last path) use wildcard
           - matches any path to always show react app, like `/` in react router
+
+- [skaffold.dev](https://skaffold.dev/)
+  - config runs outside of our cluster, not consumed by k8s
+  - anytime a change is made in targeted _manifests_, skaffold reapplies it to cluster
+    - also applies all deployments when skaffold starts
+    - also deletes all related objects when skaffold is stopped
+  - by default, whenever an image is rebuilt, it will try to push it to docker hub
+  - `artifacts` designates something in project that needs to be maintained (`context`)
+    - whenever something changes in that 'synced' directory (`src`), it will attempt to update pod directly (`dest`)
+      - doesn't rebuild image, just takes changed file and inserts it into corresponding pod
+    - if updated file does not match synced source, skaffold tries to rebuild the entire image and update deployment
+      - e.g. adding new dependency, changing package.json
+        - basically update in place or rebuild entire image
+  - `skaffold dev`, the only command you need!
+    - automatically outputs logs to terminal
+  - NB: need automated restarting/change detections in app
+    - even if skaffold updates a file in the pod, it won't restart the primary process of the pod
+      - need something inside pod that will automatically restart the process
+        - anytime create-react-app sees a file change, rebuilds react app and refreshes browser
+        - nodemon watches the server files and restarts on change as well
+  - sometimes has challenges detecting file changes inside containers
+- skaffold on Google Cloud VM
+  - changing a 'synced' vs 'unsynced' file regarding Google Cloud deployment
+    - unsynced changes are detected and sent to 'google cloud build' service
+      - rebuilds docker build for us with updated source code and Dockerfile
+        - sends updated image to Google Cloud VM to update deployment
+  - steps to connect to cloud cluster with _kubectl contexts_ i.e. connection settings
+    - lists out auth credentials, users, ip addresses, etc, to tell kubectl how to connect to different clusters
+    - create a new context config on the GC dashboard or install/use the [google-cloud-sdk](https://cloud.google.com/sdk/docs/quickstart)
+      - login to gcloud sdk with `gcloud auth login`
+        - `gcloud init` to configure k8s project
+        - select corresponding account, project and region used to create k8s cluster on GCP
+      - fetch context info to connect to GCP cluster
+        - with docker running locally
+          - run `gcloud container clusters get-credentials <cluster_name>`
+          - without local docker
+            - close Docker Desktop
+            - run `gcloud components install kubectl`
+            - run `gcloud container clusters get-credentials <cluster_name>`
+          - see cluster context options by checking docker dropdown and hovering over _kubernetes_
+      - enable google cloud build
+        - gcp console left burger drawer, click 'Cloud Build' under tools section
+          - enable cloud build api
+      - update skaffold.yaml
+        - update `build` to use `googleCloudBuild` with `projectId` instead of `local`
+          - can only have one active at any one time (gcp build or local build)
+        - update image name: `us.grc.io/<projectId>/<projectDirName>`
+          - projectDirName comes from artifacts => context
+          - update relevant deployments image names too
+      - setup ingress-nginx on the gcloud cluster (gce-gke)
+        - [kubernetes.github.io/ingress-ngingx](https://kubernetes.github.io/ingress-nginx/deploy/#gce-gke)
+          - sets up _ingress controller_ and _load balancer_
+          - confirm k8s context is set to gck before running command
+      - update /etc/hosts file to point to remote cluster
+        - redirect traffic to gce load balancer instead of localhost
+        - get LB IP from GCP dashboard => networking => network services => load balancing
+      - restart skaffold with `skaffold dev`
+        - it applies deployment config file and routing rules to gCloud cluster
+        - output logs are from remote container!
+      - NB: had to reauthenticate with gcloud for some reason
+        - `gcloud auth application-default login`
+        - see [stackoverflow post](https://stackoverflow.com/questions/41507904/could-not-find-default-credentials)
+        - to see gcloud build history => check gcp dashboard menu => tools => cloud build => history
 
 Typescript
 
