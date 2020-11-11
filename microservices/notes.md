@@ -1,354 +1,426 @@
 - Monolith vs Microservice
-    - A monolith contains all the routing, middlewares, business logic, and database access required to implement *all features* of an app
-    - A single microservice contains all of that for *one feature* of an app. Everything is self contained.
-- The big problem of microservices is *data management between services*, due to how data is stored and accessed
-    - Each service gets its own db (*Database-per-Service*), and services *never* reach into the db of another service
-        - each service should be independent of other services
-        - db schema/structure might change
-        - some services might function more efficiently with different types of DB's (sql vs nosql)
+  - A monolith contains all the routing, middlewares, business logic, and database access required to implement _all features_ of an app
+  - A single microservice contains all of that for _one feature_ of an app. Everything is self contained.
+- The big problem of microservices is _data management between services_, due to how data is stored and accessed
+  - Each service gets its own db (_Database-per-Service_), and services _never_ reach into the db of another service
+    - each service should be independent of other services
+    - db schema/structure might change
+    - some services might function more efficiently with different types of DB's (sql vs nosql)
 - communication strategies between services (not the same meaning as JS!)
-    - **sync**: services communicate with each other using *direct requests*
-        - conceptually easy to implement
-        - could circumnavigate the need for a db 
-            - if service C depends on data from services A & B, then C doesn't need a db
-        - introduces dependency between services
-        - if any inter-service request fails, the overall request fails
-        - the entire request is only as fast as the slowest request
-        - can introduce complicated webs of requests
-            - maybe services A & B also make requests to other services
-    - **async** (2 ways): services communicate eith each other using *events* in the *event bus*:
-        - event broker: receives events, sends them to interested parties
-        - each service emits events to the bus *when they need data*, other services process and return; like a reducer for all services
-            - shares all the downsides of sync, not very popular in the wild 
-        - services emit an event to event bus *whenever they make entries into their own db*, other services listening for that event type then add the entry to their respective db
-            - zero depedencies amongst services
-            - very fast, no need to navigate a web of requests
-            - data duplication; paying for extra storage (haha), extra db
-            - more complicated
+  - **sync**: services communicate with each other using _direct requests_
+    - conceptually easy to implement
+    - could circumnavigate the need for a db
+      - if service C depends on data from services A & B, then C doesn't need a db
+    - introduces dependency between services
+    - if any inter-service request fails, the overall request fails
+    - the entire request is only as fast as the slowest request
+    - can introduce complicated webs of requests
+      - maybe services A & B also make requests to other services
+  - **async** (2 ways): services communicate eith each other using _events_ in the _event bus_:
+    - event broker: receives events, sends them to interested parties
+    - each service emits events to the bus _when they need data_, other services process and return; like a reducer for all services
+      - shares all the downsides of sync, not very popular in the wild
+    - services emit an event to event bus _whenever they make entries into their own db_, other services listening for that event type then add the entry to their respective db
+      - zero depedencies amongst services
+      - very fast, no need to navigate a web of requests
+      - data duplication; paying for extra storage (haha), extra db
+      - more complicated
 - Cors requests (cross origin request sharing)
-    - common error with microservices 
-    - mechanism that allows restricted resources on a web page to be requested from another domain outside the domain from which the first resource was served
-    - browser will prevent request unless receiving server provides a specific set of headers 
-        - wire up the cors npm package in server as a middleware with `app.use(cors());`
+  - common error with microservices
+  - mechanism that allows restricted resources on a web page to be requested from another domain outside the domain from which the first resource was served
+  - browser will prevent request unless receiving server provides a specific set of headers
+    - wire up the cors npm package in server as a middleware with `app.use(cors());`
 - API request minimization strategies
-    - react example: get all posts and their associated comments
-    - sync
-        - GET request to posts service, post service requests all comments from comments service, post service assembles and returns 
-    - async
-        - posts/comments services emit an event to event bus any time a post/comment is created
-        - query service assembles all posts/comments into an efficient data structure
-            - GET request goes to query service instead of posts
+  - react example: get all posts and their associated comments
+  - sync
+    - GET request to posts service, post service requests all comments from comments service, post service assembles and returns
+  - async
+    - posts/comments services emit an event to event bus any time a post/comment is created
+    - query service assembles all posts/comments into an efficient data structure
+      - GET request goes to query service instead of posts
 - Event Bus
-    - several implementations: RabbitMQ, Kafka, NATS
-    - receives events, publishes them to listeners
-    - many different subtle features that make async communication easier or harder
-    - in Express, event is contained in the `req.body` property
+  - several implementations: RabbitMQ, Kafka, NATS
+  - receives events, publishes them to listeners
+  - many different subtle features that make async communication easier or harder
+  - in Express, event is contained in the `req.body` property
 - Moderation (whether to approve or reject an action)
-    - extract moderation logic into its own service, not in react app (would require frequent redeploys)
-    - react app only needs to tell diff between pending, rejected and approved moderation
-    - Option #1: middleman approach: introduce moderation service, communicates event creation to query service 
-        - comments service emits event saying comment was created
-            - moderation service picks up event, processes comment, emits new event saying it was moderated
-                - query service persists comment
-        - can creates delays between user submitting comment and it being persisted by query service, especially if moderation is approved by hoomans
-            - the longer the wait, the worse the UX
-        - introduces irrelevent logic and overcomplication to query service as app grows in complexity
-    - Option #2: Moderation updates status at both comments and query services
-        - comments service emits event saying comment was created
-            - both moderation and query service pick up event
-                - query service persists immediately with default status of 'pending'
-                    - moderation service eventually processes it, emits new event saying it was moderated
-                        - query service updates status
-        - solves problem of delay (can display placeholder comment for UX)
-        - introduces irrelevent logic and overcomplication to query service as app grows in complexity
-            - query service is for presentation logic (storing posts and their comments together to avoid multiple API requests)
-            - maybe comment can be up/downvoted, promoted, searchable, advertised, etc., query service doesn't/shouldn't care!
-                - that business logic should live in the comment service
-    - Option #3: query service only listens for 'update' events
-        - user submits comment, comment service persists event *with status prop* (of pending) and emits event
-            - moderation and query services pick up the creation event
-                - moderation processes specialized update and emits event *back to comment service*
-                - query service persists comment immediately (with pending status) for UX placeholder
-                    - comment service updates status and emits update event
-                        - query service picks up update event, updates comment
-        - splits events into specialized/specific event (CommentModerated) and general event (CommentUpdated)
-        - most modular approach: keeps comment business logic in the comment service
+  - extract moderation logic into its own service, not in react app (would require frequent redeploys)
+  - react app only needs to tell diff between pending, rejected and approved moderation
+  - Option #1: middleman approach: introduce moderation service, communicates event creation to query service
+    - comments service emits event saying comment was created
+      - moderation service picks up event, processes comment, emits new event saying it was moderated
+        - query service persists comment
+    - can creates delays between user submitting comment and it being persisted by query service, especially if moderation is approved by hoomans
+      - the longer the wait, the worse the UX
+    - introduces irrelevent logic and overcomplication to query service as app grows in complexity
+  - Option #2: Moderation updates status at both comments and query services
+    - comments service emits event saying comment was created
+      - both moderation and query service pick up event
+        - query service persists immediately with default status of 'pending'
+          - moderation service eventually processes it, emits new event saying it was moderated
+            - query service updates status
+    - solves problem of delay (can display placeholder comment for UX)
+    - introduces irrelevent logic and overcomplication to query service as app grows in complexity
+      - query service is for presentation logic (storing posts and their comments together to avoid multiple API requests)
+      - maybe comment can be up/downvoted, promoted, searchable, advertised, etc., query service doesn't/shouldn't care!
+        - that business logic should live in the comment service
+  - Option #3: query service only listens for 'update' events
+    - user submits comment, comment service persists event _with status prop_ (of pending) and emits event
+      - moderation and query services pick up the creation event
+        - moderation processes specialized update and emits event _back to comment service_
+        - query service persists comment immediately (with pending status) for UX placeholder
+          - comment service updates status and emits update event
+            - query service picks up update event, updates comment
+    - splits events into specialized/specific event (CommentModerated) and general event (CommentUpdated)
+    - most modular approach: keeps comment business logic in the comment service
 - dealing with missing requests
-    - if a service goes down and an event missed out on being processed, like a deadletter queue
-    - if a new service was introduced, and never had the chance to process events
-    - Option #1: Sync Requests
-        - new service makes a direct network request to other services for all their db items
-        - not great: requires new code in other services to handle these requests
-    - Option #2: Direct DB access
-        - give new service direct access to the other services db's, bypass the services
-        - new service could make its own queries, but that requires potentially a lot of extra code
-            - maybe other services have different db types (postgres, mysql, mongo, dynamo, etc)
-    - Option #3: Store Events
-        - whenever any service emits any event to the event bus, bus stores each event in its own db
-        - a new service can request all events from the bus, and process them without any extra code
-        - if a service goes down, look at the last event received and request any that happened after to fill in the gap
-        - only downside is storage, but data storage is so cheap now that it doesn't matter
+  - if a service goes down and an event missed out on being processed, like a deadletter queue
+  - if a new service was introduced, and never had the chance to process events
+  - Option #1: Sync Requests
+    - new service makes a direct network request to other services for all their db items
+    - not great: requires new code in other services to handle these requests
+  - Option #2: Direct DB access
+    - give new service direct access to the other services db's, bypass the services
+    - new service could make its own queries, but that requires potentially a lot of extra code
+      - maybe other services have different db types (postgres, mysql, mongo, dynamo, etc)
+  - Option #3: Store Events
+    - whenever any service emits any event to the event bus, bus stores each event in its own db
+    - a new service can request all events from the bus, and process them without any extra code
+    - if a service goes down, look at the last event received and request any that happened after to fill in the gap
+    - only downside is storage, but data storage is so cheap now that it doesn't matter
 - Deployment
-    - to deploy online we could rent a virtual machine from DigitalOcean, AWS, Azure, etc., and run the localhost setup there
-        - if one service gets overloaded, we could create duplicate instances on the same VM, behind a load balancer
-            - these copies would have to be allocated additional ports, which would have to be hardcoded in the event bus
-                - ties the number of services we're running with the code implementation => *lame*
-        - instantiating duplicate services on a second VM would be even more tedious
-            - still have to hardcode the ports *and* configure ip routing
-        - spinning up duplicate services for peak traffic hours would require hardcoding in the event bus too => *gross*
-    - need to:
-        - keep track of all the different services running
-        - have ability to create new copies of services on the fly
-        - automatically figure out if a service is running 
-        - whether to make contact between two services
-            - enter **docker** and **kubernetes**
-
+  - to deploy online we could rent a virtual machine from DigitalOcean, AWS, Azure, etc., and run the localhost setup there
+    - if one service gets overloaded, we could create duplicate instances on the same VM, behind a load balancer
+      - these copies would have to be allocated additional ports, which would have to be hardcoded in the event bus
+        - ties the number of services we're running with the code implementation => _lame_
+    - instantiating duplicate services on a second VM would be even more tedious
+      - still have to hardcode the ports _and_ configure ip routing
+    - spinning up duplicate services for peak traffic hours would require hardcoding in the event bus too => _gross_
+  - need to:
+    - keep track of all the different services running
+    - have ability to create new copies of services on the fly
+    - automatically figure out if a service is running
+    - whether to make contact between two services
+      - enter **docker** and **kubernetes**
 
 ## Docker
+
 - containers: isolated computing environment, contains everything needed to run a program
-    - specific env setup and knowledge of how to start it; configured in container
-    - use a container for each service, and spin up duplicates easily
-    - 1:1 pairing to docker containers and each instance of the running program
-    - kernel isolates a section of necessary processes/resources (RAM, network, CPU, harddrive, etc) for container
-    - running process with a subset of physical resources that are specifically allocated to that process
-        - isolated by *namespacing*
-        - can limit amount of resources used per process with *control groups* (cgroups)
-            - namespacing and cgroups are specific to linux
-                - docker installs a Linux VM, inside which the containers are created
-                    - linux kernal hosts all the running processes in the containers
+  - specific env setup and knowledge of how to start it; configured in container
+  - use a container for each service, and spin up duplicates easily
+  - 1:1 pairing to docker containers and each instance of the running program
+  - kernel isolates a section of necessary processes/resources (RAM, network, CPU, harddrive, etc) for container
+  - running process with a subset of physical resources that are specifically allocated to that process
+    - isolated by _namespacing_
+    - can limit amount of resources used per process with _control groups_ (cgroups)
+      - namespacing and cgroups are specific to linux
+        - docker installs a Linux VM, inside which the containers are created
+          - linux kernal hosts all the running processes in the containers
 - image
-    - file system snapshot
-    - startup command 
-- CLI 
-    - `docker run <image name>` = `docker create` + `docker start`
-        - include override (to ignore default startup command) with `docker run <image name> command`
-            - e.g. `docker run busybox ls` => lists out the file system structure within the image
-            - override command must exist within the image
-        - `docker create` preps the container file system
-        - `docker start -a <container id>`
-            - `-a` ('attach'?) makes docker watch for output from container and print to terminal
-            - by default, `run` will show all the logs from the container, `start` will not
-    - `docker ps`
-        - list all running containers
-        - modify command to show all containers that have ever been created on machine with `--all`
-        - useful to get the id of a running container
-    - `docker logs <container id>` to look at container and retrieve all info that has been emitted
-    - `docker stop <container id>` to stop a container
-        - hardware signal SIGTERM (terminate signal) is sent to primary process in that container to shut itself down
-            - gives time to save files or emit signals, etc
-        - if container doesn't automatically stop within 10 seconds, docker automatically issues the kill command
-    - `docker kill <container id>` to kill a container
-        - sends SIGKILL command to immediately shut down with no additional work
-            - useful if container froze, unresponsive
-    - `docker system prune`
-        - delete stopped container, all networks not used by at least one container, all dangling images, all build cache
-    - multi-command containers
-        - if we need to execute second command inside a running container, e.g. `redis-cli` to interact with redis instance running in container
-        - basically grants shell access to the container
-        - `docker exec -it <container id> <command>`
-            - `exec`: run another command
-            - `-it`: (interactive?) allow us to provide input to the container, actually 2 commands:
-                -  `-i`: attach terminal to STDIN (standard in) channel of that process
-                - `-t`: basically formats text with STDOUT
-                    - STDIN, STDOUT, STDERR from Linux kernal 
-            - `docker exec -it <container id> sh`
-                - `sh` is actually a program, executed in that container
-                    - command processor aka a shell, like zsh or bash
-                    - gives full terminal access inside the container, can run typical commands from the unix env
-                    - most containers have `sh` program already included
-    - `docker build <build context>` takes a Dockerfile and generates an image out of it
-        - tied to the Docker-CLI, for creating docker images
-        - context is the set of files and folders we want to encapsulate in the container
-        - *tagging an image*
-            - `docker build -t <your docker id>/<repo or project name>:<version> <directory to use for build>`
-                - `docker build -t myDockerId/redis:latest .`
-    - `docker commit` for manual image generation, but Dockerfile and build is more common
+  - file system snapshot
+  - startup command
+- CLI
+  - `docker run <image name>` = `docker create` + `docker start`
+    - include override (to ignore default startup command) with `docker run <image name> command`
+      - e.g. `docker run busybox ls` => lists out the file system structure within the image
+      - override command must exist within the image
+    - `docker create` preps the container file system
+    - `docker start -a <container id>`
+      - `-a` ('attach'?) makes docker watch for output from container and print to terminal
+      - by default, `run` will show all the logs from the container, `start` will not
+  - `docker ps`
+    - list all running containers
+    - modify command to show all containers that have ever been created on machine with `--all`
+    - useful to get the id of a running container
+  - `docker logs <container id>` to look at container and retrieve all info that has been emitted
+  - `docker stop <container id>` to stop a container
+    - hardware signal SIGTERM (terminate signal) is sent to primary process in that container to shut itself down
+      - gives time to save files or emit signals, etc
+    - if container doesn't automatically stop within 10 seconds, docker automatically issues the kill command
+  - `docker kill <container id>` to kill a container
+    - sends SIGKILL command to immediately shut down with no additional work
+      - useful if container froze, unresponsive
+  - `docker system prune`
+    - delete stopped container, all networks not used by at least one container, all dangling images, all build cache
+  - multi-command containers
+    - if we need to execute second command inside a running container, e.g. `redis-cli` to interact with redis instance running in container
+    - basically grants shell access to the container
+    - `docker exec -it <container id> <command>`
+      - `exec`: run another command
+      - `-it`: (interactive?) allow us to provide input to the container, actually 2 commands:
+        - `-i`: attach terminal to STDIN (standard in) channel of that process
+        - `-t`: basically formats text with STDOUT
+          - STDIN, STDOUT, STDERR from Linux kernal
+      - `docker exec -it <container id> sh`
+        - `sh` is actually a program, executed in that container
+          - command processor aka a shell, like zsh or bash
+          - gives full terminal access inside the container, can run typical commands from the unix env
+          - most containers have `sh` program already included
+  - `docker build <build context>` takes a Dockerfile and generates an image out of it
+    - tied to the Docker-CLI, for creating docker images
+    - context is the set of files and folders we want to encapsulate in the container
+    - _tagging an image_
+      - `docker build -t <your docker id>/<repo or project name>:<version> <directory to use for build>`
+        - `docker build -t myDockerId/redis:latest .`
+  - `docker commit` for manual image generation, but Dockerfile and build is more common
 - container lifecycler
-    - when you start a container that's already been created, cannot replace default command
-        - container will alway use original command from when container was first created
+  - when you start a container that's already been created, cannot replace default command
+    - container will alway use original command from when container was first created
 - creating docker images
-    - create a Dockerfile, containing configuration to define container behavior
-    - pass file off to Docker Client (docker cli), which passes it to Docker Server, which builds usable image
-    - flow for creating a Dockerfile
-        - specify base image
-        - add config to run some commands to install additional programs/dependencies
-        - specify a command to run on container startup
-    - uses a cache behind the scenes to improve rebuild speed
-    - common commands in Dockerfile
-        - FROM: specify base image
-        - WORKDIR: set working directory in container; all commands will be issued relative to the directory
-        - COPY: copy over a file
-        - RUN: run a command
-        - CMD: set command to run when the container starts up
+  - create a Dockerfile, containing configuration to define container behavior
+  - pass file off to Docker Client (docker cli), which passes it to Docker Server, which builds usable image
+  - flow for creating a Dockerfile
+    - specify base image
+    - add config to run some commands to install additional programs/dependencies
+    - specify a command to run on container startup
+  - uses a cache behind the scenes to improve rebuild speed
+  - common commands in Dockerfile
+    - FROM: specify base image
+    - WORKDIR: set working directory in container; all commands will be issued relative to the directory
+    - COPY: copy over a file
+    - RUN: run a command
+    - CMD: set command to run when the container starts up
 
 ## Kubernetes (aka K8s)
-- tool for running a bunch of containers in a *cluster*
-    - a cluster contains any number of VM's, each referred to as a node
-        - nodes managed by a *Master*, a program that manages everything in the cluster
-            - give it some config files to describe how we want our containers to run and interact with each other
-                - send requests to cluster, cluster automatically figures out how to route requests to appropriate service
-                - makes communication easy, e.g. between event bus node and service nodes
-                - makes scaling services easy
-            - kube looks locally first for images in config file, if not found, looks on Docker Hub
-            - creates containers with image, distributes the containers amongst nodes
-            - containers are hosted in a *pod*, inside the node
-            - to manage pods, kubectl creates a *deployment*
-                - reads config file for instructions
-                - automatically recreates pods if they fail
-            - kube creates a *service* to manage node-to-node communication 
-                - not a running program or server, gives access to running pods (or containers in the pods) inside cluster
-                - abstracts difficulty in handling networking amongst IP port routing
-                - great for microservice event bus; pod will reach out to *service* in order to contact another pod
+
+- tool for running a bunch of containers in a _cluster_
+  - a cluster contains any number of VM's, each referred to as a node
+    - nodes managed by a _Master_, a program that manages everything in the cluster
+      - give it some config files to describe how we want our containers to run and interact with each other
+        - send requests to cluster, cluster automatically figures out how to route requests to appropriate service
+        - makes communication easy, e.g. between event bus node and service nodes
+        - makes scaling services easy
+      - kube looks locally first for images in config file, if not found, looks on Docker Hub
+      - creates containers with image, distributes the containers amongst nodes
+      - containers are hosted in a _pod_, inside the node
+      - to manage pods, kubectl creates a _deployment_
+        - reads config file for instructions
+        - automatically recreates pods if they fail
+      - kube creates a _service_ to manage node-to-node communication
+        - not a running program or server, gives access to running pods (or containers in the pods) inside cluster
+        - abstracts difficulty in handling networking amongst IP port routing
+        - great for microservice event bus; pod will reach out to _service_ in order to contact another pod
 - kubernetes cluster
-    - a collection of nodes + a master to manage them
+  - a collection of nodes + a master to manage them
 - node
-    - a virtual machine that runs containers
+  - a virtual machine that runs containers
 - pod
-    - more or less a running container; technically a pod can run multiple containers
-    - if you create a pod without a version number, docker tags it as *latest*
-        - k will default search k hub for image if there's no version number; if not found, error!
-- deployment 
-    - monitor/manage a set of pods, make sure they are running and restarts them if they crash
-    - useful for versioning, takes care of updates automatically
-    - `apiVersion: apps/v1` => deployment lives in apps bucket
-    - `replicas: 1` => number of pods we want to create, running some image
-    - `selector` tells deployment which pods its supposed to manage
-    - `template` where we specify exact config of a pod we want deployment to create
+  - more or less a running container; technically a pod can run multiple containers
+  - if you create a pod without a version number, docker tags it as _latest_
+    - k will default search k hub for image if there's no version number; if not found, error!
+- deployment
+  - monitor/manage a set of pods, make sure they are running and restarts them if they crash
+  - useful for versioning, takes care of updates automatically
+  - `apiVersion: apps/v1` => deployment lives in apps bucket
+  - `replicas: 1` => number of pods we want to create, running some image
+  - `selector` tells deployment which pods its supposed to manage
+  - `template` where we specify exact config of a pod we want deployment to create
 - service
-    - provides an easy-to-remember URL to access a running container
+  - provides an easy-to-remember URL to access a running container
 - config files
-    - tells kubernetes about the different Deployments, Pods and Services (referred to as "Objects") that we want to create
-    - written in YAML
-    - always store these files with project source code - free documentation!
-    - do not create Objects *without* config files
-        - you can run direct commands to create Objects on command line, only do this for testing
+  - tells kubernetes about the different Deployments, Pods and Services (referred to as "Objects") that we want to create
+  - written in YAML
+  - always store these files with project source code - free documentation!
+  - do not create Objects _without_ config files
+    - you can run direct commands to create Objects on command line, only do this for testing
 - basic commands
-    - `kubectl get pods`
-        - print out info about all of the running pods
-    - `kubectl exec -it [pod_name] [cmd]`
-        - soon to be deprecated; use `kubectl exec [POD] -- [COMMAND]` instead
-        - execut the given command in a running pod
-    - `kubectl logs [pod_name`
-        - print out logs from the given pod
-    - `kubectl delete pod [pod_name]`
-        - deletes the given pod
-    - `kubectl apply -f [config file name]`
-        - tells k to process the config
-        - apply multiple config files with `kubectl apply -f .` for all in directory
-    - `kubectl describe pod [pod_name]`
-        - print out some info about the running pod
+  - `kubectl get pods`
+    - print out info about all of the running pods
+  - `kubectl exec -it [pod_name] [cmd]`
+    - soon to be deprecated; use `kubectl exec [POD] -- [COMMAND]` instead
+    - execut the given command in a running pod
+  - `kubectl logs [pod_name`
+    - print out logs from the given pod
+  - `kubectl delete pod [pod_name]`
+    - deletes the given pod
+  - `kubectl apply -f [config file name]`
+    - tells k to process the config
+    - apply multiple config files with `kubectl apply -f .` for all in directory
+  - `kubectl describe pod [pod_name]`
+    - print out some info about the running pod
 - deployment commands
-    - `kubectl get deployments`
-        - list all running deployments
-    - `kubectl describe deployment [depl_name]`
-        - print out details about specific deployment
-    - `kubectl apply -f [config file name]`
-        - create a deployment out of a config file, 'apply' the config to a cluster
-    - `kubectl delete deployment [depl_name]`
-        - delete a deployment
+  - `kubectl get deployments`
+    - list all running deployments
+  - `kubectl describe deployment [depl_name]`
+    - print out details about specific deployment
+  - `kubectl apply -f [config file name]`
+    - create a deployment out of a config file, 'apply' the config to a cluster
+  - `kubectl delete deployment [depl_name]`
+    - delete a deployment
 - updating deployments
-    - method #1: not used often professionally
-        - make change to project code
-        - rebuild image, specifying new image version
-        - in deploy config file, update image version
-            - introduces chance of error by having to manually update
-        - run command `kubectl apply -f [depl_file_name]`
-    - method #2: preferred process for dev env
-        - deployment must be using *latest* tage in the pod spec section
-            - k8s will auto update deployment version if latest is updated
-        - make an update to your code
-        - build the image
-        - push the image to docker hub
-        - run command `kubectl rollout restart deployment [depl_name]`
-    - or just use *Skaffold* to automate method 2
-        - automates many tasks in k8s dev env
-        - easy updates for code in a *running pod*
-        - easy to create/delete all objects tied to a project
-        - [skaffold.dev](https://skaffold.dev/)
-            - config runs outside of our cluster, not consumed by k8s2
-            - anytime a change is made in targeted *manifests*, skaffold reapplies it to cluster
-                - also applies all deployments when skaffold starts
-                - also deletes all related objects when skaffold is stopped
-            - by default, whenever an image is rebuilt, it will try to push it to docker hub
-            - `artifacts` designates something in project that needs to be maintained (`context`)
-                - whenever something changes in that directory (`src`), it will attempt to update pod (`dest`)
-                - if a file doesn't match source, skaffold tries to rebuild image and update deployment
-                    - e.g. adding new dependency
-                    - basically update in place or rebuild entire image
-            - `skaffold dev` only command you need! 
-            - automatically outputs logs to terminal
-            - NB: need automated restarting/change detections in app
-                - even if skaffold updates a file in the pod, it won't restart the primary process of the pod
-                    - need something inside pod that will automatically restart the process
-                        - anytime create-react-app sees a file change, rebuilds react app and refreshes browser
-                        - nodemon watches the server files and restarts on change as well
-            - sometimes has challenges detecting file changes inside containers
+  - method #1: not used often professionally
+    - make change to project code
+    - rebuild image, specifying new image version
+    - in deploy config file, update image version
+      - introduces chance of error by having to manually update
+    - run command `kubectl apply -f [depl_file_name]`
+  - method #2: preferred process for dev env
+    - deployment must be using _latest_ tage in the pod spec section
+      - k8s will auto update deployment version if latest is updated
+    - make an update to your code
+    - build the image
+    - push the image to docker hub
+    - run command `kubectl rollout restart deployment [depl_name]`
+  - or just use _Skaffold_ to automate method 2
+    - automates many tasks in k8s dev env
+    - easy updates for code in a _running pod_
+    - easy to create/delete all objects tied to a project
+    - [skaffold.dev](https://skaffold.dev/)
+      - config runs outside of our cluster, not consumed by k8s2
+      - anytime a change is made in targeted _manifests_, skaffold reapplies it to cluster
+        - also applies all deployments when skaffold starts
+        - also deletes all related objects when skaffold is stopped
+      - by default, whenever an image is rebuilt, it will try to push it to docker hub
+      - `artifacts` designates something in project that needs to be maintained (`context`)
+        - whenever something changes in that directory (`src`), it will attempt to update pod (`dest`)
+        - if a file doesn't match source, skaffold tries to rebuild image and update deployment
+          - e.g. adding new dependency
+          - basically update in place or rebuild entire image
+      - `skaffold dev` only command you need!
+      - automatically outputs logs to terminal
+      - NB: need automated restarting/change detections in app
+        - even if skaffold updates a file in the pod, it won't restart the primary process of the pod
+          - need something inside pod that will automatically restart the process
+            - anytime create-react-app sees a file change, rebuilds react app and refreshes browser
+            - nodemon watches the server files and restarts on change as well
+      - sometimes has challenges detecting file changes inside containers
 - Services
-    - another *object* like a pod or deployment, also created by config file
-    - used to set up communication between different pods, or access from outside the cluster
-    - types of services
-        - Cluster IP
-            - sets up an easy-to-remember URL to access a pod, only exposes pods *in the cluster*
-            - network different pods together
-            - make a request to url with `http://<service_name>/<port>/someRoute `
-        - Node Port
-            - makes a pod accessible from *outside the cluster*, usually used for dev purposes
-        - Load Balancer
-            - makes a pod accessible from *outside the cluster*, this is the right way to expose a pod to the outside world
-        - External Name
-            - redirects an in-cluster request to a CNAME url
-    - *spec selector*, choose which pods to expose, matches pods by their *label* like css class names
-    - port vs targetPort
-        - port attached to the container, e.g. express app.listen(4000), is the *targetPort*
-        - port attached to the service, which interacts with browser, is the *port*
-        - usually just keep them the same 
-    - nodePort => randomly assigned port between 30000-32767
-        - access from outside world to the node service, for dev purposes
-        - `localhost:3xxxx/<pod name>` 
+  - another _object_ like a pod or deployment, also created by config file
+  - used to set up communication between different pods, or access from outside the cluster
+  - types of services
+    - Cluster IP
+      - sets up an easy-to-remember URL to access a pod, only exposes pods _in the cluster_
+      - network different pods together
+      - make a request to url with `http://<service_name>/<port>/someRoute `
+    - Node Port
+      - makes a pod accessible from _outside the cluster_, usually used for dev purposes
+    - Load Balancer
+      - makes a pod accessible from _outside the cluster_, this is the right way to expose a pod to the outside world
+    - External Name
+      - redirects an in-cluster request to a CNAME url
+  - _spec selector_, choose which pods to expose, matches pods by their _label_ like css class names
+  - port vs targetPort
+    - port attached to the container, e.g. express app.listen(4000), is the _targetPort_
+    - port attached to the service, which interacts with browser, is the _port_
+    - usually just keep them the same
+  - nodePort => randomly assigned port between 30000-32767
+    - access from outside world to the node service, for dev purposes
+    - `localhost:3xxxx/<pod name>`
 - to add multiple objects to a single yaml file, use `---` for linebreak
 - `type: ClusterIP` is optional as kube will default to clusterip
 
-Integrating React App into K Cluster with load balancer service 
+Integrating React App into K Cluster with load balancer service
+
 - React application is actually Create-React-App Dev server
 - house it in a container, in a pod
-    - create image of app and deploy to docker hub
-    - requires a deployment config to host inside cluster
-        - and a clusterIP so ingress nginx controller can direct traffic to pod
+  - create image of app and deploy to docker hub
+  - requires a deployment config to host inside cluster
+    - and a clusterIP so ingress nginx controller can direct traffic to pod
 - dev server initially serves up HTML/CSS/JS to the browser, and becomes irrelevant after initial request
 - After initiating, all requests for data from browser need to go to the components inside the k cluster pods
-    - for browser to reach out to pods, we have 2 options
+  - for browser to reach out to pods, we have 2 options
 - option #1: no good!
-    - create a NodePort service for each pod, to expose it to the outside world
-        - Node Ports are creating with quasi random ports
-        - changing node ports would require updating ports in the react app code
-- option #2: 
-    - **load balancer service**
-        - one single point of entry to the cluster, which will route requests to appropriate cluster ip service
-        - tells k8s to reach out to its cloud provider (aws, gc, azure) and provision a load balancer, gets traffic in to a *single pod*
-            - load balancer exists outside our cluster, in the provider env
-                - directs outside traffic into pods
-    - **ingress or ingress controller**
-        - technically 2 different things but basically:
-            - a pod with a set of routing rules to distribute traffic to other services
-            - request comes into load balancer, which sends request to ingress controller
-            - based on request's path and ingress routing rules, sends request to correct pod
-                - (technically sends it to cluster ip service which then sends req to pod)
-        - [ingress-nginx](https://github.com/kubernetes/ingress-nginx) (different from *kubernetes ingress*)
-            - acts as the ingress controller
-            - requires a config file containing router rules
-            - ingress controller scans all the objects in our cluster for one with `annotations` metadata prop containing `kubernetes.io/ingress.class: "nginx"` 
-                - this signifies it contains all the routing rules
-            - [concerning local development](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/):
-                - yaml line `- host: <domain.com>` require a tweak to Host File `/etc/hosts`
-                    - need sudo access, add domain to k8s ip, e.g. `127.0.0.1 <domain_name>.com`
-                - tricks nginx to think we're coming to it from a specific domain instead of localhost
-            - gotchas
-                - cannot differentiate HTTP request methods for routing
-                    - e.g. POST and GET requests to the same route of /posts
-                    - requires fix to code, rebuild code, update deployment manually => gross
-                - cannot interpret wildcards in routes
-                    - `/posts/:id/comments` needs regex for :id
-                        - `/posts/?(.*)/comments`
-                        - requires addition to annotations
-                - for SPA react app using router, default path in `paths` (last path) use wildcard
-                    - matches any path to always show react app, like `/` in react router
+  - create a NodePort service for each pod, to expose it to the outside world
+    - Node Ports are creating with quasi random ports
+    - changing node ports would require updating ports in the react app code
+- option #2:
+  - **load balancer service**
+    - one single point of entry to the cluster, which will route requests to appropriate cluster ip service
+    - tells k8s to reach out to its cloud provider (aws, gc, azure) and provision a load balancer, gets traffic in to a _single pod_
+      - load balancer exists outside our cluster, in the provider env
+        - directs outside traffic into pods
+  - **ingress or ingress controller**
+    - technically 2 different things but basically:
+      - a pod with a set of routing rules to distribute traffic to other services
+      - request comes into load balancer, which sends request to ingress controller
+      - based on request's path and ingress routing rules, sends request to correct pod
+        - (technically sends it to cluster ip service which then sends req to pod)
+    - [ingress-nginx](https://github.com/kubernetes/ingress-nginx) (different from _kubernetes ingress_)
+      - acts as the ingress controller
+      - requires a config file containing router rules
+      - ingress controller scans all the objects in our cluster for one with `annotations` metadata prop containing `kubernetes.io/ingress.class: "nginx"`
+        - this signifies it contains all the routing rules
+      - [concerning local development](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/):
+        - yaml line `- host: <domain.com>` require a tweak to Host File `/etc/hosts`
+          - need sudo access, add domain to k8s ip, e.g. `127.0.0.1 <domain_name>.com`
+          - tricks nginx to think we're coming to it from a specific domain instead of localhost
+          - may have a "connection not private" error
+            - nginx by default tries to use https with a self-sign certificate
+            - not trusted by chrome: "Kubernetes Ingress Controller Fake Certificate"
+            - type 'thisisunsafe' anywhere in browser window to bypass chrome security
+              - only do this in a development situation!
+      - gotchas
+        - cannot differentiate HTTP request methods for routing
+          - e.g. POST and GET requests to the same route of /posts
+          - requires fix to code, rebuild code, update deployment manually => gross
+        - cannot interpret wildcards in routes
+          - `/posts/:id/comments` needs regex for :id
+            - `/posts/?(.*)/comments`
+            - requires addition to annotations
+        - for SPA react app using router, default path in `paths` (last path) use wildcard
+          - matches any path to always show react app, like `/` in react router
+
+Typescript
+
+- javascript + a type system
+- helps catch errors during development
+- uses _type annotations_ to analyze code
+  - type: easy way to refer to the different props + functions a value has
+  - Primitive Types
+    - number
+    - string
+    - boolean
+    - symbol
+    - void
+      - not returning anything, can technically return null and undefined too
+    - null
+    - undefined
+  - Object Types
+    - functions
+    - arrays
+    - classes
+    - objects
+  - _any_ type
+  - _never_ type: we will never reach the end of the function, e.g. throwing errors
+  - type annotations: we tell TS what type of value a variable will refer to
+    - when a function returns the _any_ type and we need to clarify the value
+    - when we declare a var on one line and initialize it later
+    - when we want a var to have a type that cannot be inferred
+  - type inference: TS tries to figure out what type of value a variable refers to
+    - TS infers if variable declaration and initialization happen in one expression
+    - regarding functions, TS will try to infer return values but not arguments
+      - always annotate arguments cuz we have to
+      - always annotate return values anyways in case we mess up
+  - destructuring with annotations
+    - replace var with destructuring statement
+- only active _during development_
+  - TS code is compiled into JS before deployment
+  - [typescriptlang.org](https://www.typescriptlang.org/)
+- doesn't provide any performance optimization
+  - has no effect on how our code gets executed by browser or Node
+- `npm install -g typescript ts-node`
+  - ts-node is a CLI tool for compiling and executing TS easily from terminal
+    - combines commands `tsc <fileName>.ts` to transpile and `node <fileName>.js` to execute
+- _tuples_
+  - array-like structure where each element represents some property of a record
+    - specific ordering of elements inside of it
+    - can be created with `type` aliases
+  - useful for csv files when representing rows
+  - not very useful otherwise as the array values have no context
+    - more useful to have key/value objects
+- interfaces
+  - creates a new type, describing the property names and value types of an object
+  - general strategy for reusable code
+    - create functions that accept arguments that are typed with interfaces
+    - objects/classes can decide to implement a given interface to worok with a function
+- class method modifiers
+  - public
+    - can be called anywhere, any time
+  - private
+    - can be called by other methods in _this_ class
+  - protected
+    - can be called by other methods in _this_ class, or by other methods in child classes
+  - overwriting a method cannot change the modifier in the child class
+  - can be used on methods but also properties/fields in the class
+    - `constructor(public color: string) {}`
+      - will be assigned as an instance var
