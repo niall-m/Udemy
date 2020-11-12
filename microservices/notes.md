@@ -461,6 +461,7 @@ Typescript
     - create functions that accept arguments that are typed with interfaces
     - objects/classes can decide to implement a given interface to worok with a function
 - class method modifiers
+
   - public
     - can be called anywhere, any time
   - private
@@ -471,3 +472,20 @@ Typescript
   - can be used on methods but also properties/fields in the class
     - `constructor(public color: string) {}`
       - will be assigned as an instance var
+
+- express route validation with [express validator](https://express-validator.github.io/docs/)
+  - can validate incoming request body, parameters like :id's, and query strings
+  - use `validationResult` object to store any errors occuring during request validation to be used in response
+    - convert to json array object with `.array()`
+      - `return res.status(400).send(errors.array())`
+  - this package has its own convention about what params are sent back on the response
+    - in microservices environment, different services could use different backends with different response structures
+      - we must have a consistenly structured response from _all_ servers, no matter what went wrong
+        - create a consistent error response structure from any service with a shared library middleware
+          - capture all possible errors using Express' [error handling mechanism](http://expressjs.com/en/guide/error-handling.html#error-handling)
+            - async handlers need to manually capture error (and pass it off to the `next` function)
+            - when we `throw` an error, express first looks for handler with 4th var (_err_, req, res, next)
+            - convey info from Request Handler to Middleware through Error object
+              - with TS we'll have to subclass custom errors
+                - when extending a class in TS thats built into the language, e.g. Error
+                  - `Object.setPrototypeOf(this, ClassName.prototype);`
