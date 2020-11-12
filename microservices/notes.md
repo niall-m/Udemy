@@ -405,6 +405,7 @@ Integrating React App into K Cluster with load balancer service
         - `gcloud auth application-default login`
         - see [stackoverflow post](https://stackoverflow.com/questions/41507904/could-not-find-default-credentials)
         - to see gcloud build history => check gcp dashboard menu => tools => cloud build => history
+  - `kubectl config --help` to find commands to configure cluster/context info
 
 Typescript
 
