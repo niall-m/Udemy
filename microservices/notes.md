@@ -460,8 +460,8 @@ Typescript
   - general strategy for reusable code
     - create functions that accept arguments that are typed with interfaces
     - objects/classes can decide to implement a given interface to worok with a function
+    - class _implements_ interface
 - class method modifiers
-
   - public
     - can be called anywhere, any time
   - private
@@ -472,6 +472,17 @@ Typescript
   - can be used on methods but also properties/fields in the class
     - `constructor(public color: string) {}`
       - will be assigned as an instance var
+- abstract classes
+
+  - cannot be instantiated
+  - used to set up requirements for subclasses
+  - Do create a CLass when translated to JS
+    - TS compiles to JS, interfaces don't survive the translation, don't exist in JS world
+    - can be used for `instanceof` checks
+    - list out all the properties that any extending subclass must have
+      - similar to implementing interfaces
+        - `abstract statusCode: number`
+          - means subclass _must_ implement that abstract member property
 
 - express route validation with [express validator](https://express-validator.github.io/docs/)
   - can validate incoming request body, parameters like :id's, and query strings
@@ -479,13 +490,19 @@ Typescript
     - convert to json array object with `.array()`
       - `return res.status(400).send(errors.array())`
   - this package has its own convention about what params are sent back on the response
-    - in microservices environment, different services could use different backends with different response structures
-      - we must have a consistenly structured response from _all_ servers, no matter what went wrong
-        - create a consistent error response structure from any service with a shared library middleware
-          - capture all possible errors using Express' [error handling mechanism](http://expressjs.com/en/guide/error-handling.html#error-handling)
-            - async handlers need to manually capture error (and pass it off to the `next` function)
-            - when we `throw` an error, express first looks for handler with 4th var (_err_, req, res, next)
-            - convey info from Request Handler to Middleware through Error object
-              - with TS we'll have to subclass custom errors
-                - when extending a class in TS thats built into the language, e.g. Error
-                  - `Object.setPrototypeOf(this, ClassName.prototype);`
+  - in microservices environment, different services could use different backends with different response structures
+    - we must have a consistenly structured response from _all_ servers, no matter what went wrong
+      - create a consistent error response structure from any service with a shared library middleware
+    - capture all possible errors using Express' [error handling mechanism](http://expressjs.com/en/guide/error-handling.html#error-handling)
+      - async handlers need to manually capture error (and pass it off to the `next` function)
+        - or use express-async-errors seen below
+    - convey info from Request Handler to Middleware through Error object
+      - when we `throw` an error, _express_ first looks for handler with 4th var (_err_, req, res, next)
+        - this will be used as error middleware
+    - with TS we'll have to subclass custom errors
+      - set prototype when extending a class in TS thats built into the language, e.g. Error
+        - `Object.setPrototypeOf(this, ClassName.prototype);`
+- [express-async-errors](https://www.npmjs.com/package/express-async-errors)
+  - changes the default behavior of how express handles route handlers
+  - implements `await` on any `async` function
+  - install and require after express
