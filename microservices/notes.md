@@ -364,6 +364,7 @@ Integrating React App into K Cluster with load balancer service
         - nodemon watches the server files and restarts on change as well
   - sometimes has challenges detecting file changes inside containers
 - skaffold on Google Cloud VM
+
   - changing a 'synced' vs 'unsynced' file regarding Google Cloud deployment
     - unsynced changes are detected and sent to 'google cloud build' service
       - rebuilds docker build for us with updated source code and Dockerfile
@@ -406,6 +407,29 @@ Integrating React App into K Cluster with load balancer service
         - see [stackoverflow post](https://stackoverflow.com/questions/41507904/could-not-find-default-credentials)
         - to see gcloud build history => check gcp dashboard menu => tools => cloud build => history
   - `kubectl config --help` to find commands to configure cluster/context info
+
+- mongodb containerized db
+  - [mongo](https://hub.docker.com/_/mongo)
+    - default port 27017
+    - all data is lost whenever deleting or restarting the pod by default
+  - connect with **mongoose**
+    - getting TS and Mongoose (m) to cooperate
+      - m type definition file doesn't communicate correct properties easily to TS
+      - m adds some properties not explicitly defined in the document/constructor
+        - e.g. createdAt, updatedAt, timestamps, db stuff etc
+        - workaround: tell TS that there's two different sets of properties with interfaces
+          - one set of props passed to the constructor, a second set accessible on the document it creates
+          - option 1: custom function that associates interface with `new User` call to ensure correct arguments
+            - the function can then be exported and used in lieu of new User
+          - option 2: add custom function with types to the static properties of the model
+            - `schema.statics.methodName`
+            - accomplishes the same thing but adds the type checks to the Model, removes superfluous exports
+            - need to tell TS about the static function added to the model with another interface
+          - NB
+            - m user model represents entire collection of models
+            - m user document represents one single user
+            - m types are capital (`String`); TS types are lowercase (`string`)
+        -
 
 Typescript
 
@@ -483,6 +507,13 @@ Typescript
       - similar to implementing interfaces
         - `abstract statusCode: number`
           - means subclass _must_ implement that abstract member property
+
+- angle brackets => generic syntax
+  - functions or types passed as arguments
+  - customize the types being used in a function, class or interface
+  - `<T>` refers to argument 1
+
+Express notes
 
 - express route validation with [express validator](https://express-validator.github.io/docs/)
   - can validate incoming request body, parameters like :id's, and query strings
