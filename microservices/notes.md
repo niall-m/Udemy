@@ -163,7 +163,7 @@
       - `docker build -t <your docker id>/<repo or project name>:<version> <directory to use for build>`
         - `docker build -t myDockerId/redis:latest .`
   - `docker commit` for manual image generation, but Dockerfile and build is more common
-- container lifecycler
+- container lifecycle
   - when you start a container that's already been created, cannot replace default command
     - container will alway use original command from when container was first created
 - creating docker images
@@ -273,7 +273,7 @@
     - Cluster IP
       - sets up an easy-to-remember URL to access a pod, only exposes pods _in the cluster_
       - network different pods together
-      - make a request to url with `http://<service_name>/<port>/someRoute `
+      - make a request to url with `http://<service_name>/<port>/someRoute`
     - Node Port
       - makes a pod accessible from _outside the cluster_, usually used for dev purposes
     - Load Balancer
@@ -497,6 +497,7 @@ Integrating React App into K Cluster with load balancer service
         - cookies tend to require the need for a data store, e.g. sessionId
         - can be copied and reused down the line
 - **server-side rendering** (with NextJS)
+  - usefor SEO search engine optimization and page load speed
   - review of loading process of a _typical_ react app into the browser
     - browser makes GET request, client responds with an HTML file
     - browser loads scripts and makes followup requests to get and execute those too
@@ -514,11 +515,34 @@ Integrating React App into K Cluster with load balancer service
     - in order to satisfy 'no data store' requirement while using a cookie, use [cookie-session](https://www.npmjs.com/package/cookie-session)
       - cookies can be challenging to handle across diff languages due to encryption (or really decryption on different backends)
         - JWTs, when used correctly, are naturally resistant to tampering, which allows one to skip encrypting the cookie
-        - [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken) for generating a web token
-          - (don't forget @types for cookie-session & jsonwebtoken)
+          - [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken) for generating a web token
           - create a web token with `jwt.sign()`
-          - `jwt.verify()` to verify token was not tampered, to pull data out of jwt payload
-  - usefor SEO search engine optimization and page load speed
+          - `jwt.verify()` to verify token was not tampered and to pull data out of jwt payload
+            - (don't forget @types for cookie-session & jsonwebtoken)
+          - although anyone can see the jwt payload, by verifying the signature with the _signing key_, we can ensure the payload has not been altered
+            - need to secretly share the signing key with all consuming services with docker/kubernetes
+    - k8s secrets
+      - create `Secret` type object, load into each container hosting consuming services as an environment variable
+        - add secret to respective deployment config files
+          - add `env` array to container
+          - if referencing a secret inside a pod that doesn't exist, get a `CreateContainerConfigError`
+            - to debug, run a `describe` on the pod
+        - reference env var secret in the code in the container
+          - to access env variable with Node JS, `process.env.<variable>`
+          - TS never assumes an environment variable is defined
+            - could check in file or (preferably) when app starts
+      - imperative command: `kubectl create secret generic <name-of-secret> --from-literal=<key>=<value>`
+        - _generic_ is a type of secret
+        - use imperative command if you want to avoid listing secret in a declarative config file
+          - have to remember the secrets yourself! best for dev or staging environments
+- formatting JSON properties
+  - remap or delete properties of api responses to create consistent formatting when dealing with various sources
+    - in _js console_, include `toJSON() { ... }` function and block in object
+      - block logic will override any function calling the object, e.g. stringify, jsonify, etc
+    - in _mongoose_, to apply to user document, add second argument, `{ toJSON: {} }`, to mongoose model Schema
+      - `DocumentToObjectOptions` object with properties, instead of a function
+        - make direct changes to the `ret` @param (aka returned object) on the `transform` prop
+      - writing view level logic into the model... oh well
 
 Typescript
 
