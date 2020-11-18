@@ -408,10 +408,9 @@ Integrating React App into K Cluster with load balancer service
         - to see gcloud build history => check gcp dashboard menu => tools => cloud build => history
   - `kubectl config --help` to find commands to configure cluster/context info
 
-- mongodb containerized db
-  - [mongo](https://hub.docker.com/_/mongo)
-    - default port 27017
-    - all data is lost whenever deleting or restarting the pod by default
+- [mongo](https://hub.docker.com/_/mongo) containerized db
+  - default port 27017
+  - all data is lost whenever deleting or restarting the pod by default
   - connect with **mongoose**
     - getting TS and Mongoose (m) to cooperate
       - m type definition file doesn't communicate correct properties easily to TS
@@ -425,11 +424,101 @@ Integrating React App into K Cluster with load balancer service
             - `schema.statics.methodName`
             - accomplishes the same thing but adds the type checks to the Model, removes superfluous exports
             - need to tell TS about the static function added to the model with another interface
-          - NB
-            - m user model represents entire collection of models
-            - m user document represents one single user
-            - m types are capital (`String`); TS types are lowercase (`string`)
-        -
+      - NB
+        - m user model represents entire collection of models
+        - m user document represents one single user
+        - m types are capital (`String`); TS types are lowercase (`string`)
+    - salting the hash
+      - static methods can be accessed without creating an instance of the class
+        - can call `Password.toHash` without having to call `new Password`
+      - `scrypt` hashing function that is callback based
+        - to use in conjunction with async/await, convert to promises with `promisify`
+        - scrypt returns a Buffer
+          - similar to an array of integers but corresponds to a raw memory allocation outside the V8 heap
+      - mongoose pre-save hooks
+        - when saving user to db, intercept the save attempt with mongoose middleware function
+          - take the password set on the user document, hash it, overwrite the password on the document
+            - `userSchema.pre('save', async function(done) { do stuff... done() })`
+              - mongoose support for async/await isn't great, so we have to manually call `done`
+              - uses `function` instead of fat arrow
+                - with middleware function, we have access to the document being saved as `this`
+                - fat arrow function binds the context of `this` to the enveloping scope which we don't want
+- Authentication Strategies: _are they logged in?_
+  - user auth with microservices is an unsolved problem, there are many ways to do it, no one right way
+  - Option **#1**
+    - individual services rely on the auth service
+      - e.g. purchasing service sends JSON web token (JWT), cookie, etc, via _sync request_ to auth service
+        - if auth service goes down, any other service relying on auth will automatically fail
+        - changes to auth state are immediately reflected
+        - reminder: sync = direct request from one service to another, without event bus; not JS
+  - Option **#1.1**
+    - individual services rely on the auth service as a gateway
+      - auth contains logic to inspect JWT/cookie and decide if user is authenticated
+        - blocks or forwards request along to intended destination, e.g. purchasing service
+        - same pros and cons of option 1
+  - Option **#2**
+    - individual services know how to authenticate a user
+      - no dependency on a gateway or outside service
+      - self contained service, doesn't care about an auth service
+      - some down sides:
+        - creates duplicate authentication code amongst services
+          - not too bad, can extract into a shared library
+        - stale cookies/tokens
+          - changes to auth state are not immediately reflected
+            - after authentication, auth checks go against the cookie, not auth service
+            - any update to account state will not be seen until account logs out and logs back in
+          - workaround strategies
+            - set an expiration date on the cookie (e.g. 15 secs, mins, or hours)
+            - if there's no room for error (malicious things could happen before expiration)
+              - emit events on the bus with a short-lived cache to reflect auth state
+                - cache persists as long as the expiration timer, as there's no need after expiration
+  - cookies != JSON web tokens
+    - cookies are a transport mechanism
+      - can move any kind of data between browser and server
+      - server response can include a Header of `Set-Cookie` with any value
+      - browser appends that cookie to headers of any followup requests to the same domain/port
+      - stored in/managed by browser, automatically included in followup requests
+    - JWT's are an authentication/authorization mechanism
+      - stores any data we want, have to manage it manually
+      - payloads are stored in a token; to communicate it from browser to server
+      - can include **in 'Authorization' header** with jwt inside it
+      - can include token **in the body** of the (post, put, delete) request
+      - can also mix and match and store JWT **inside a cookie**
+  - requirements for option 2 auth mechanism
+    - **must be able to:**
+      - tell us user details
+      - to handle authorization info
+      - have a built-in, tamper-resistant way to expire/invalidate itself
+      - be easily understood by many languages/different backends
+      - must not require a data store on the service to handle auth request
+    - well suited for JWT
+      - has its own self destruct mechanisms
+      - cookie expiration is handled by the browser
+        - cookies tend to require the need for a data store, e.g. sessionId
+        - can be copied and reused down the line
+- **server-side rendering** (with NextJS)
+  - review of loading process of a _typical_ react app into the browser
+    - browser makes GET request, client responds with an HTML file
+    - browser loads scripts and makes followup requests to get and execute those too
+    - now loaded, browser requests privvy data, representing the initial need for auth
+      - header, body or cookie would work
+        - not with server-side bruh!
+  - the idea is for the backend server (client) to respond to the initial GET request with display content
+    - client builds fully rendered html file, with content, as response
+      - circumvents need for browser to load scripts and make follow-up requests
+        - however, requires auth info with that first request
+          - it's impossible to customize the initial request coming from the browser
+          - eliminates use case for header and body type requests, leaving only the cookie (or jwt stored in a cookie)
+            - or service workers... but thats a different story entirely
+      - client (NextJS) does that lifting, makes necessary followup requests
+    - in order to satisfy 'no data store' requirement while using a cookie, use [cookie-session](https://www.npmjs.com/package/cookie-session)
+      - cookies can be challenging to handle across diff languages due to encryption (or really decryption on different backends)
+        - JWTs, when used correctly, are naturally resistant to tampering, which allows one to skip encrypting the cookie
+        - [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken) for generating a web token
+          - (don't forget @types for cookie-session & jsonwebtoken)
+          - create a web token with `jwt.sign()`
+          - `jwt.verify()` to verify token was not tampered, to pull data out of jwt payload
+  - usefor SEO search engine optimization and page load speed
 
 Typescript
 
@@ -497,7 +586,6 @@ Typescript
     - `constructor(public color: string) {}`
       - will be assigned as an instance var
 - abstract classes
-
   - cannot be instantiated
   - used to set up requirements for subclasses
   - Do create a CLass when translated to JS
@@ -507,7 +595,6 @@ Typescript
       - similar to implementing interfaces
         - `abstract statusCode: number`
           - means subclass _must_ implement that abstract member property
-
 - angle brackets => generic syntax
   - functions or types passed as arguments
   - customize the types being used in a function, class or interface
