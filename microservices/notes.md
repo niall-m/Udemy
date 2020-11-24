@@ -536,6 +536,8 @@ Integrating React App into K Cluster with load balancer service
             - (don't forget @types for cookie-session & jsonwebtoken)
           - although anyone can see the jwt payload, by verifying the signature with the _signing key_, we can ensure the payload has not been altered
             - need to secretly share the signing key with all consuming services with docker/kubernetes
+      - cookie-session turns session object into a string,
+        - cookie-session middleware then sends cookie back to users browser inside response `set-cookie` header
     - k8s secrets
       - create `Secret` type object, load into each container hosting consuming services as an environment variable
         - add secret to respective deployment config files
@@ -671,3 +673,53 @@ Express notes
   - changes the default behavior of how express handles route handlers
   - implements `await` on any `async` function
   - install and require after express
+
+Testing
+
+- types of tests
+  - unit test how a single piece of code, e.g. single middleware
+  - test how different different pieces of code, components, or services work together
+    - testing how services work together can be very complicated, requiring a cost effective test environment in k8s
+    - better to test services in isolation
+- goals and steps
+  - 1: basic request handling
+    - assert against an expected auth cookie, db entry, status code returned, etc
+    - Jest test runner
+      - start in-memory copy of mongodb, mongodb-memory-server
+      - start up express app
+      - use [supertest](https://www.npmjs.com/package/supertest) library to make fake req's to express app
+      - run assertions to make sure request was correctly processed
+  - 2: unit testing against models and their functionality
+  - 3: emitting and receiving events in service
+    - simulates different services working together
+- regarding supertest
+  - running tests on multiple services concurrently on the same port will cause errors
+    - requires access to dev/prod app env, to make use of [ephemeral](https://www.npmjs.com/package/supertest#example) ports
+    - split app setup and instantiation for porting
+  - testing against cookies
+    - supertest `request` returns the response object
+      - use `.get()` to inspect headers of response, like Set-Cookie
+    - NB: cookie-session `secure` enforces https, incompatible for testing
+      - set secure to false in test environment
+      - Jest sets terminal process.env.NODE_ENV variable to `'test'` when running tests
+    - when signing out, session is set to empty and cookie expiration is set to past timestamp
+      - `'express:sess=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; httponly'`
+  - issues with testing cookies
+    - browser and postman both have built-in functionalty to manage cookies
+      - supertest does not...
+        - pull 'Set-Cookie' auth cookie off response and include in followup request
+          - `.set('Cookie', cookie)`
+- how to run tests
+  - directly from terminal without docker
+  - implies _local env_ is capable of running each service
+    - complex projects might make this hard
+- test library dependencies
+  - `install --save-dev @types/jest @types/supertest jest ts-jest supertest mongodb-memory-server`
+  - exclude from dockerfile with `npm install --only=prod`
+  - package.js for ts support with jest
+    - test script `--no-cache`
+    - jest config with ts-jest preset, node testEnvironment, setupFilesAfterEnv startup script
+    - sometimes a test fails despite being fixed, ts-jest or jest not detecting changes made to files
+      - restart test runner with ctrl-c and npm run test
+- environment variables in jest test env
+  - set `process.env.whatever` in `beforeAll` block
