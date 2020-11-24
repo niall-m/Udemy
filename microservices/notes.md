@@ -506,6 +506,9 @@ Integrating React App into K Cluster with load balancer service
       - does user have a 'req.session.jwt'?
         - if not set, or invalid jwt, return null
         - if yes, return jwt payload
+  - more auth middlewares
+    - cookie headers on incoming request to any service will need:
+      - middleware to extract jwt payload and set on `req.currentUser`
 - **server-side rendering** (with NextJS)
   - usefor SEO search engine optimization and page load speed
   - review of loading process of a _typical_ react app into the browser
@@ -641,6 +644,8 @@ Typescript
     - `if (!req.session || !req.session.jwt)` === ` if (!req.session?.jwt)`
   - bang `!`
     - override warnings for potentially undefined objects
+- Augmenting Type Definitions
+  - `declare global { namespace Express { interface Request { customOptionalParameter?: CustomType }}}`
 
 Express notes
 
