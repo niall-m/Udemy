@@ -472,6 +472,11 @@ Integrating React App into K Cluster with load balancer service
             - if there's no room for error (malicious things could happen before expiration)
               - emit events on the bus with a short-lived cache to reflect auth state
                 - cache persists as long as the expiration timer, as there's no need after expiration
+  - Auth Service steps for sign in
+    - does a user with this email exist? if not, respond with error
+    - compare passwords of stored user to supplied pw
+    - if the same, success
+    - user now considered to be logged in, send JWT in cookie
   - cookies != JSON web tokens
     - cookies are a transport mechanism
       - can move any kind of data between browser and server
@@ -487,7 +492,7 @@ Integrating React App into K Cluster with load balancer service
   - requirements for option 2 auth mechanism
     - **must be able to:**
       - tell us user details
-      - to handle authorization info
+      - handle authorization info
       - have a built-in, tamper-resistant way to expire/invalidate itself
       - be easily understood by many languages/different backends
       - must not require a data store on the service to handle auth request
@@ -535,12 +540,12 @@ Integrating React App into K Cluster with load balancer service
         - _generic_ is a type of secret
         - use imperative command if you want to avoid listing secret in a declarative config file
           - have to remember the secrets yourself! best for dev or staging environments
-- formatting JSON properties
+- (re)formatting JSON properties
   - remap or delete properties of api responses to create consistent formatting when dealing with various sources
     - in _js console_, include `toJSON() { ... }` function and block in object
       - block logic will override any function calling the object, e.g. stringify, jsonify, etc
-    - in _mongoose_, to apply to user document, add second argument, `{ toJSON: {} }`, to mongoose model Schema
-      - `DocumentToObjectOptions` object with properties, instead of a function
+    - in _mongoose_, to apply to user document, add second argument, `{ toJSON: {} }`, to model Schema
+      - `DocumentToObjectOptions` object with properties, unlike JS function
         - make direct changes to the `ret` @param (aka returned object) on the `transform` prop
       - writing view level logic into the model... oh well
 
