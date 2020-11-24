@@ -692,7 +692,8 @@ Testing
   - 2: unit testing against models and their functionality
   - 3: emitting and receiving events in service
     - simulates different services working together
-- regarding supertest
+- regarding supertesting
+
   - running tests on multiple services concurrently on the same port will cause errors
     - requires access to dev/prod app env, to make use of [ephemeral](https://www.npmjs.com/package/supertest#example) ports
     - split app setup and instantiation for porting
@@ -709,6 +710,13 @@ Testing
       - supertest does not...
         - pull 'Set-Cookie' auth cookie off response and include in followup request
           - `.set('Cookie', cookie)`
+  - extracting duplicate auth signin logic to testing setup
+    - global async function that executes and returns the cookie
+    - adding typescript support for global func
+      - `declare global { namespace NodeJS { interface Global { myFunction(): Promise<arrayOfTypeReturned[]>`
+    - instantiate cookie in jest it block and set on supertest request headers
+    - alternate to simply extracting function to its own file and importing into test file
+
 - how to run tests
   - directly from terminal without docker
   - implies _local env_ is capable of running each service
