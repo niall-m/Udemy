@@ -472,11 +472,6 @@ Integrating React App into K Cluster with load balancer service
             - if there's no room for error (malicious things could happen before expiration)
               - emit events on the bus with a short-lived cache to reflect auth state
                 - cache persists as long as the expiration timer, as there's no need after expiration
-  - Auth Service steps for sign in
-    - does a user with this email exist? if not, respond with error
-    - compare passwords of stored user to supplied pw
-    - if the same, success
-    - user now considered to be logged in, send JWT in cookie
   - cookies != JSON web tokens
     - cookies are a transport mechanism
       - can move any kind of data between browser and server
@@ -501,6 +496,16 @@ Integrating React App into K Cluster with load balancer service
       - cookie expiration is handled by the browser
         - cookies tend to require the need for a data store, e.g. sessionId
         - can be copied and reused down the line
+  - Auth Service
+    - steps for sign in
+      - does a user with this email exist? if not, respond with error
+      - compare passwords of stored user to supplied pw
+      - if the same, success
+      - user now considered to be logged in, send JWT in cookie
+    - current user
+      - does user have a 'req.session.jwt'?
+        - if not set, or invalid jwt, return null
+        - if yes, return jwt payload
 - **server-side rendering** (with NextJS)
   - usefor SEO search engine optimization and page load speed
   - review of loading process of a _typical_ react app into the browser
@@ -523,6 +528,8 @@ Integrating React App into K Cluster with load balancer service
           - [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken) for generating a web token
           - create a web token with `jwt.sign()`
           - `jwt.verify()` to verify token was not tampered and to pull data out of jwt payload
+            - first arg is actual token, second arg is jwt key
+            - wrap in try catch
             - (don't forget @types for cookie-session & jsonwebtoken)
           - although anyone can see the jwt payload, by verifying the signature with the _signing key_, we can ensure the payload has not been altered
             - need to secretly share the signing key with all consuming services with docker/kubernetes
@@ -628,6 +635,12 @@ Typescript
   - functions or types passed as arguments
   - customize the types being used in a function, class or interface
   - `<T>` refers to argument 1
+- TS evaluations misc
+  - swift guard `?`
+    - when checking parameters on potentially null or undefined objects like the session
+    - `if (!req.session || !req.session.jwt)` === ` if (!req.session?.jwt)`
+  - bang `!`
+    - override warnings for potentially undefined objects
 
 Express notes
 
