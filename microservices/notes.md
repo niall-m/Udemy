@@ -510,21 +510,25 @@ Integrating React App into K Cluster with load balancer service
     - cookie headers on incoming request to any service will need:
       - middleware to extract jwt payload and set on `req.currentUser`
 - **server-side rendering** (with NextJS)
-  - usefor SEO search engine optimization and page load speed
+  - useful for SEO search engine optimization and page load speed
+    - user sees content appear on the screen much more quickly
+      - particularly on a mobile device
   - review of loading process of a _typical_ react app into the browser
     - browser makes GET request, client responds with an HTML file
     - browser loads scripts and makes followup requests to get and execute those too
     - now loaded, browser requests privvy data, representing the initial need for auth
       - header, body or cookie would work
         - not with server-side bruh!
-  - the idea is for the backend server (client) to respond to the initial GET request with display content
+  - the main idea
+    - is for the backend server (client) to respond to the initial GET request with display content
     - client builds fully rendered html file, with content, as response
       - circumvents need for browser to load scripts and make follow-up requests
+      - client (NextJS) does that lifting, makes necessary followup requests
         - however, requires auth info with that first request
           - it's impossible to customize the initial request coming from the browser
           - eliminates use case for header and body type requests, leaving only the cookie (or jwt stored in a cookie)
             - or service workers... but thats a different story entirely
-      - client (NextJS) does that lifting, makes necessary followup requests
+  - auth
     - in order to satisfy 'no data store' requirement while using a cookie, use [cookie-session](https://www.npmjs.com/package/cookie-session)
       - cookies can be challenging to handle across diff languages due to encryption (or really decryption on different backends)
         - JWTs, when used correctly, are naturally resistant to tampering, which allows one to skip encrypting the cookie
@@ -560,6 +564,23 @@ Integrating React App into K Cluster with load balancer service
       - `DocumentToObjectOptions` object with properties, unlike JS function
         - make direct changes to the `ret` @param (aka returned object) on the `transform` prop
       - writing view level logic into the model... oh well
+- NextJS client directory - SSR
+  - `npm install react react-dom next axios`
+  - routing inside a nextJS project with `pages` directory
+    - nextjs interprets filenames in the _pages_ directory as distinct routes within the app
+    - uses `index.js` as root route
+  - to startup a next project, add script to run `next` in package.json
+  - to run inside kubernetes cluster, build image Dockerfile and deployment
+    - for local cluster, tag and push image
+    - add entries to skaffold and ingress service
+  - nextjs sometimes finicky with file change detection when running in docker container
+    - setup next.config.js file for webpackDevMiddleware
+      - `config.watchOptions.poll = 300`, webpack polls everything every 300 ms
+    - next doesn't automatically restart itself when changes are made to this config file
+      - restart (kill) pod manually to update nextjs config file
+  - [global css](https://github.com/vercel/next.js/blob/master/errors/css-global.md) with bootstrap
+  - layers between browser and auth service
+    - ingress nginx load balancer => clusterIP service => pod running auth container => express app => route handler
 
 Typescript
 
