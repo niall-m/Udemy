@@ -581,6 +581,8 @@ Integrating React App into K Cluster with load balancer service
   - [global css](https://github.com/vercel/next.js/blob/master/errors/css-global.md) with bootstrap
   - layers between browser and auth service
     - ingress nginx load balancer => clusterIP service => pod running auth container => express app => route handler
+  - forcible redirects with `Router` from `'next/router';`
+    - add onSuccess callback for redirect into custom hook
 
 Typescript
 
