@@ -447,7 +447,7 @@ Integrating React App into K Cluster with load balancer service
   - user auth with microservices is an unsolved problem, there are many ways to do it, no one right way
   - Option **#1**
     - individual services rely on the auth service
-      - e.g. purchasing service sends JSON web token (JWT), cookie, etc, via _sync request_ to auth service
+      - e.g. purchasing service sends [JSON web token](https://jwt.io/) (JWT), cookie, etc, via _sync request_ to auth service
         - if auth service goes down, any other service relying on auth will automatically fail
         - changes to auth state are immediately reflected
         - reminder: sync = direct request from one service to another, without event bus; not JS
@@ -566,7 +566,7 @@ Integrating React App into K Cluster with load balancer service
       - writing view level logic into the model... oh well
 - NextJS client directory - SSR
   - `npm install react react-dom next axios`
-  - routing inside a nextJS project with `pages` directory
+  - route inside a nextJS project via `pages` directory
     - nextjs interprets filenames in the _pages_ directory as distinct routes within the app
     - uses `index.js` as root route
   - to startup a next project, add script to run `next` in package.json
@@ -583,6 +583,72 @@ Integrating React App into K Cluster with load balancer service
     - ingress nginx load balancer => clusterIP service => pod running auth container => express app => route handler
   - forcible redirects with `Router` from `'next/router';`
     - add onSuccess callback for redirect into custom hook
+  - what happens behind the scenes with incoming requests to NextJS client app
+    - inspect URL of incoming request, determine set of components to show
+    - call component's `getInitialProps` static method
+      - only location where we can fetch data needed by components during SSR process
+        - while NextJS attempts to render app on server
+      - make request here to confirm authentication during SSR
+        - can't use hooks as `getInitialProps` is not a component
+          - it is a function executed on server side, not in browser
+      - NB: cannot do data loading inside of components
+    - render each component with data from 'getInitialProps' _one time_
+      - provided as a prop to component
+    - assemble HTML from all components, send back response
+  - `Error: connect ECONNREFUSED 127.0.0.1:80`
+    - /etc/hosts file points ticketing.dev to ip (127.0.0.1), default port 80
+      - this port/ip is bound to ingress nginx, which routes to client application (nextJs)
+    - effects of making requests _without specifying the domain_
+      - from within the _browser_, i.e. within a react component
+        - browser assumes and prepends current domain to request, e.g. 127.0.0.1:80/request/path
+        - k8s ingress nginx catches request, inspects path, routes to service, all good
+          - network tab => request => headers => general => request URL
+      - from server-side, i.e. within `getInitialProps`, within NextJS client
+        - request defaults to Node http layer
+        - Node assumes you're trying to make a request on local machine, assigns localhost (127.0.0.1:80)
+          - problem is, NextJS client is being run from _within a k8s container itself_
+            - request sent to localhost:80 within the container
+            - doesn't get redirected to ingress-nginx or directly to target service
+    - **solution**: configure how axios makes requests depending on where request is made
+      - from browser
+        - baseURL of "" empty string, allow browser to continue making the correct domain assumptions
+      - from nextjs app during SSR phase
+        - option 1: not great
+          - attach k8s service domain to request
+            - implies react client must know names and corresponding routes for everything, which we already configured with ingress-nginx
+            - e.g. `http://auth-srv/api/users/currentuser`
+        - option 2: better!
+          - configure nextjs to send requests to ingress-nginx whenever it needs to query data from a k8s service
+          - ingress-nginx service configured to know where to route requests based on just the path
+            - how to make request directly to nginx from inside the cluster (in nextjs)?
+            - how to manage cookie?
+            - to make request from NextJS, need cookie from original incoming request, extract/include in request to nginx
+          - only works when trying to access a different service inside the same **namespace**
+            - k8s: all the different objects are created under a specific namespace, like a sandbox
+            - `kubectl get namespace`
+          - to do **Cross Namespace Service Communication** to a service in a different namespace
+            - `kubectl get services -n ingress-nginx` to get services from another namespace
+            - api request route param: `http://ServiceName.Namespace.svc.cluster.local`
+              - e.g. `http://ingress-nginx.ingress-nginx.svc.cluster.local/api/request/path`
+              - however, without a domain (host), k8s doesn't know what set of rules to use within ingress-srv.yaml
+                - provide second argument, an object, to `axios.get()` api request
+                  - `{ headers: { Host: 'targetHost.dev' } }`
+                  - or use host from cookie extraction method below
+              - to create simplified request to `http://ingress-nginx/srv`, create **external name service**
+                - remaps domain of a request, like an alias, to look like option 1
+          - pass along cookie
+            - when 'getInitialProps' is called, first argument is an object that contains the `req` request object
+              - check req.headers to get the cookie, and other stuff like the host
+      - how do you know if code will be executed by browser or server (nextjs)
+        - request from a component, always issued from browser
+        - request from `getInitialProps` might be executed from the client or server
+          - check: [if (typeof window === 'undefined')](https://github.com/vercel/next.js/issues/5354#issuecomment-520305040)
+          - server
+            - hard refresh
+            - clicking link from different domain
+            - typing URL into address bar
+          - client
+            - navigating from one page to another while in the app
 
 Typescript
 
