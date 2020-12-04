@@ -591,6 +591,8 @@ Integrating React App into K Cluster with load balancer service
       - make request here to confirm authentication during SSR
         - can't use hooks as `getInitialProps` is not a component
           - it is a function executed on server side, not in browser
+      - calling `getInitialProps` from within 2 different components introduces complexity
+        - see 'pass along cookie' section below
       - NB: cannot do data loading inside of components
     - render each component with data from 'getInitialProps' _one time_
       - provided as a prop to component
@@ -609,7 +611,7 @@ Integrating React App into K Cluster with load balancer service
           - problem is, NextJS client is being run from _within a k8s container itself_
             - request sent to localhost:80 within the container
             - doesn't get redirected to ingress-nginx or directly to target service
-    - **solution**: configure how axios makes requests depending on where request is made
+    - _solution_: configure how axios makes requests depending on where request is made
       - from browser
         - baseURL of "" empty string, allow browser to continue making the correct domain assumptions
       - from nextjs app during SSR phase
@@ -637,12 +639,22 @@ Integrating React App into K Cluster with load balancer service
               - to create simplified request to `http://ingress-nginx/srv`, create **external name service**
                 - remaps domain of a request, like an alias, to look like option 1
           - pass along cookie
-            - when 'getInitialProps' is called, first argument is an object that contains the `req` request object
-              - check req.headers to get the cookie, and other stuff like the host
+            - whenever `getInitialProps` is called on the nextjs server, it is automatically passed the `context` object as its first argument
+              - context contains the `req` request object
+                - check req.headers to get the cookie, and other stuff like the host
+            - NB: arguments provided to `getInitialProps` function for a _page_ are different to those provided to a custom `_app` component
+              - inside **page**, first arg = context === { req, res }
+              - inside **custom app component**, req object is nested: context === { Component, ctx: { req, res }}
+                - `console.log(Object.keys(appContext))` => [ 'AppTree', 'Component', 'router', 'ctx' ]
+                - when tying gIP to \_app component, other gIP func's on individual _pages_ do not get automatically invoked
+                  - appContext.Component is a reference to the _page_ being rendered
+                    - manually call page .getInitialProps with AppContext.Component.getInitialProps
+                    - manually split page props from app props in \_app wrapper
       - how do you know if code will be executed by browser or server (nextjs)
         - request from a component, always issued from browser
         - request from `getInitialProps` might be executed from the client or server
           - check: [if (typeof window === 'undefined')](https://github.com/vercel/next.js/issues/5354#issuecomment-520305040)
+            - then you're on the server, make request to nginx,
           - server
             - hard refresh
             - clicking link from different domain
