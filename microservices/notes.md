@@ -661,6 +661,10 @@ Integrating React App into K Cluster with load balancer service
             - typing URL into address bar
           - client
             - navigating from one page to another while in the app
+  - `Link`, custom component developed by NextJS
+    - doesn't create anchor tag for you... create your own!
+    - trick for conditionally showing links in header.js
+      - make array of objects or null, filter out null, map objects into react html
 
 Typescript
 
