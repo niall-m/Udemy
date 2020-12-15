@@ -836,3 +836,58 @@ Testing
       - restart test runner with ctrl-c and npm run test
 - environment variables in jest test env
   - set `process.env.whatever` in `beforeAll` block
+
+Code Sharing and Reuse Between Services
+
+- Options for sharing logic
+  - 1: copy pasta, boooooo
+  - 2: Git Submodule
+    - separate repo for common code, added to target repo as submod
+      - version control and documentation is good, albeit painful setup
+  - 3: NPM package
+    - move common code into new project, _publish_ it as a package to NPM registry, install as npm dependency
+      - version control, documentation, and ease of use
+        - but changing common code has several steps and can be tedious (republish, update package.json)
+- NPM Registry
+  - publish packages to NPM public registry, to public/private registry _inside an organization_, or to a private registry
+    - private organizations/registries cost money
+      - alternatively, host your own open source version of npm registry to go free-tier
+  - sign up for an account at [npm](npmjs.com)
+    - '+ Add Organization'
+  - publishing npm modules
+    - create directory and run `npm init -y` to create the package.json
+    - for `name` field, enter `@organizationName/packageName`
+    - inside directory, create git repo
+      - `git init`, `git add .`, `git commit -m 'initial commit'`
+    - to publish => `npm publish --access public`
+      - without `--access public` then npm assumes it to be private within organization
+      - might have to run `npm login` with credentials to publish
+    - transpile TS into JS to avoid versioning errors
+      - install typescript del-cli --save-dev
+      - `--tsc init`
+      - tell TS where to find source code and where to place it after transpiling to JS
+        - add `tsc` command to package.json scripts
+        - in tsconfig
+          - uncomment `declaration`
+            - generates type def file when transpiling for backwards compatability
+          - uncomment `outDir` and add target directory
+        - run tsc command in packagejson
+      - ensure build is fresh, remove everything in build before rebuilding
+        - del-cli script in packagejson
+          - e.g. `"clean": "del ./build/*"`
+      - more edits to packagejson
+        - edit `main` to reflect main file being imported
+        - add `types` file pointer for ts projects
+        - add `files` array to tell npm which files must be included in final published version of package
+      - manually save changes, push to git, and increment version number
+        - or use `npm version patch` to have npm automatically increment before running `npm publish`
+        - semantic versioning
+    - create easy importing of submodules/dirs for users of the npm package
+      - import then export everything in the index file
+        - `export * from './errors/bad-request-error';`
+          - automatically imports then immediately exports
+          - one line for every file
+          - make sure anything imported is actually installed
+      - `npm update @package/dir` on CLI inside proper project
+  - to verify container updated version of module
+    - `kubectl exec -it <pod-name> sh` to open k8s shell on pod

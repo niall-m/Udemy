@@ -1,4 +1,3 @@
-import { header } from 'express-validator';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import request from 'supertest';
