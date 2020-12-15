@@ -46,6 +46,7 @@ userSchema.pre('save', async function(done) {
   done();
 })
 
+// allows TS to do type checking on properties used to create new records
 userSchema.statics.build = (attrs: UserAttrs) => {
   return new User(attrs);
 }
