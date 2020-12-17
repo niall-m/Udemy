@@ -891,3 +891,93 @@ Code Sharing and Reuse Between Services
       - `npm update @package/dir` on CLI inside proper project
   - to verify container updated version of module
     - `kubectl exec -it <pod-name> sh` to open k8s shell on pod
+
+[NATS](https://docs.nats.io/) Streaming Server - Event Bus Implementation
+
+- **NATS** and **NATS Streaming Server** are 2 different things
+  - NATS is a simple implementation of event sharing, the more advanced streaming server is built on top of NATS
+- [nats streaming docker documentation](https://hub.docker.com/_/nats-streaming)
+  - to set custom commandline options to be executed when container starts up, provide them in yaml `containers` section
+    - `args` is an array of arguments to provide to primary command that gets executed when container is built from image
+- options to connect to NATS pod in the cluster
+  - #1: program => **ingress-nginx** <=> NATS ClusterIP Service <=> NATS Pod
+  - #2: program => **NodePort Service** <=> NATS Pod
+  - #3: program => **Port-Forward Port 4222** => NATS Pod
+    - define port-forwarding on cluster with kubectl (strictly in a development setting) from CLI
+      - `kubectl port-forward <pod-name> localPortNumber:portOnPod`
+    - useful for breaking cluster connection
+      - simply stop the process running the port-forward command
+- [node-nats-streaming](https://www.npmjs.com/package/node-nats-streaming)
+  - client library used to communicate with NATS
+  - requires services to subscribe to _channels_ (aka topics) to listen for events
+  - stores all events in memory by default
+    - can customize to store in flat files on harddrive or in a MySQL or Postgres db
+  - documentation refers to `stan` (nats spelled backwards): aka the client
+  - cannot make use of async/await, use event-driven approach
+    - after client connects to nats server, emits connect event
+      - listen for this event with `stan.on('connect', () => {});`
+        - takes callback func as second arg, executed after
+    - is NATS world, events are more commonly referred to as _messages_
+  - NATS can only share raw data, cannot share plain javascript objects, must convert to JSON
+  - `publish` function
+    - 1st arg is name of channel (subject)
+    - 2nd arg is the data being shared
+    - 3rd arg is optional callback func
+  - `subscribe` function, receive data through subscription
+    - create subscription, listen for particular event off the subscription
+    - `subscription.on('message', (msg) => {})`;
+      - optional second argument for queue groups, see below
+  - `subscriptionOptions`, set additional options by chaining on additional calls
+    - eg `setDeliverAllAvailable`, `setManualAckMode`, `setMaxInFlight`
+    - provide as third arg to `subscribe`
+    - default behavior, if there's an error in the service when receiving the event, it's lost, gone, poof
+      - customize with this with setManualAckMode (acknowledge)
+      - if we do not acknowledge the event by deadline (30 sec or smt), NATS resends event
+        - `msg.ack()`: service acknowledges successful processing to node-nats-streaming-server
+- accessing event data with typescript, check out `Message` type definition file to see useful functions on a message
+  - `getSubject()` returns the name of the channel that the message came from
+  - `getSequence()` returns the number of that event
+    - event counting starts at 1, not 0
+  - `getData()` returns data in the event/message
+- NATS never wants to see a duplicate clientID
+  - if we want to scale, run multiple copies of a listener/publisher client, must have different ids
+- **queue groups**
+  - allows gatekeeping when there's multiple copies of a client (dont want same msg to get processed by both copies of client)
+  - created inside of a channel
+  - can have multiple q groups associated with one channel
+  - subscription joins queue group, second argument to `subscribe` is name of q group
+  - when event comes into channel, nats sends event to only one member of the group
+  - can still have other services that are not a member of the queue group, but are still listening to the channel
+- client health checks
+  - to check missing events and logs, port forward monitoring service
+  - `kubectl port-forward nats-depl-594c9945f6-2cffp 8222:8222`
+    - go to `localhost:8222/streaming`
+    - [monitoring](https://docs.nats.io/nats-server/configuration/monitoring)
+    - `localhost:8222/streaming/channelsz?subs=1`
+  - adjust heartbeat values in k8s deployment
+  - override SIGINT and SIGTERM with `stan.close()` to override default waiting behavior
+    - NATS will wait for client to restart which can cause delays in event reprocessing
+- **core concurrency issues**
+  - listener can fail to process the event
+  - one listener runs more quickly than another
+  - NATS might think a client is still alive when it is dead
+  - we might receive the same event twice
+    - NB: these thing shappen with sync communication and monolith style apps too, not just async
+  - solutions that will not work
+    - limit to just one service
+      - creates bottleneck and can still fail regardless
+    - try to handle every error case
+      - almost infinite number of ways to fail, too expensive
+    - share state between services of last event processed, to process in order
+      - sequential processing of events has a big performance penalty
+    - last event processed tracked by resource ID, e.g. giving each user their own sequence
+      - with NATS, to get a restarted sequence, would require a totally different channel
+      - max of 1000 channels by default, too much processing overhead
+    - last id processed with publisher db recording last sequence
+      - sending event from publisher to NATS is a one way operation, cannot get the last seq
+  - real solution
+    - record last transaction number/version per resource/transaction
+      - use DurableName in conjunction with DeliverAllAvailble and a queue group
+        - DeliverAllAvailble: gets all events emitted in the past
+        - setDurableName: keep track of all events that have gone to that subscription
+        - queue group ensures NATS will not dump the durablename subscription and that events only go to one instance of service
