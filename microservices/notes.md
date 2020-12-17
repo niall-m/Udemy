@@ -753,6 +753,8 @@ Typescript
     - override warnings for potentially undefined objects
 - Augmenting Type Definitions
   - `declare global { namespace Express { interface Request { customOptionalParameter?: CustomType }}}`
+- [readonly modifier](https://www.typescriptlang.org/docs/handbook/classes.html#readonly-modifier)
+  - like `final` in java, makes sure a given property does not get changed
 
 Express notes
 
