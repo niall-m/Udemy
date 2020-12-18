@@ -533,6 +533,7 @@ Integrating React App into K Cluster with load balancer service
       - cookies can be challenging to handle across diff languages due to encryption (or really decryption on different backends)
         - JWTs, when used correctly, are naturally resistant to tampering, which allows one to skip encrypting the cookie
           - [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken) for generating a web token
+            - [https://www.base64decode.org/](https://www.base64decode.org/) for decoding encrypted jwt
           - create a web token with `jwt.sign()`
           - `jwt.verify()` to verify token was not tampered and to pull data out of jwt payload
             - first arg is actual token, second arg is jwt key
@@ -911,7 +912,7 @@ Code Sharing and Reuse Between Services
       - simply stop the process running the port-forward command
 - [node-nats-streaming](https://www.npmjs.com/package/node-nats-streaming)
   - client library used to communicate with NATS
-  - requires services to subscribe to _channels_ (aka topics) to listen for events
+  - requires services to subscribe to _channels_ (aka topics (or subjects)) to listen for events
   - stores all events in memory by default
     - can customize to store in flat files on harddrive or in a MySQL or Postgres db
   - documentation refers to `stan` (nats spelled backwards): aka the client
@@ -960,6 +961,7 @@ Code Sharing and Reuse Between Services
   - override SIGINT and SIGTERM with `stan.close()` to override default waiting behavior
     - NATS will wait for client to restart which can cause delays in event reprocessing
 - **core concurrency issues**
+
   - listener can fail to process the event
   - one listener runs more quickly than another
   - NATS might think a client is still alive when it is dead
@@ -983,3 +985,11 @@ Code Sharing and Reuse Between Services
         - DeliverAllAvailble: gets all events emitted in the past
         - setDurableName: keep track of all events that have gone to that subscription
         - queue group ensures NATS will not dump the durablename subscription and that events only go to one instance of service
+
+- alternatives with cross language support, if using multiple languages across services
+  - JSON Schema
+    - allows you to define JSON structures, different properties/values, and validations
+  - Protobuf
+    - a way to serialize info, like JSON, but more compact format
+  - Apache Avro
+    - themed around java, support for other langs as well
