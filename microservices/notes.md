@@ -920,6 +920,7 @@ Code Sharing and Reuse Between Services
     - after client connects to nats server, emits connect event
       - listen for this event with `stan.on('connect', () => {});`
         - takes callback func as second arg, executed after
+        - `connect` args: cluster id, client id, then url we want to connect to
     - is NATS world, events are more commonly referred to as _messages_
   - NATS can only share raw data, cannot share plain javascript objects, must convert to JSON
   - `publish` function
@@ -985,6 +986,13 @@ Code Sharing and Reuse Between Services
         - DeliverAllAvailble: gets all events emitted in the past
         - setDurableName: keep track of all events that have gone to that subscription
         - queue group ensures NATS will not dump the durablename subscription and that events only go to one instance of service
+- Typescript getters: get accessors
+  - throw an error if someone tries to access a NATS client variable before it's been connected
+  - `get client() { ...code }`, access NATS client by using `client()` property
+  - when calling in another file, no need to invoke with `()`
+  - its not a function we call, its a function that defines the property on the instanec
+    - `new SomePublisherClass(natsWrapper.client)`
+
 
 - alternatives with cross language support, if using multiple languages across services
   - JSON Schema
