@@ -839,6 +839,34 @@ Testing
       - restart test runner with ctrl-c and npm run test
 - environment variables in jest test env
   - set `process.env.whatever` in `beforeAll` block
+- regarding NATS: publishers need a nats client wrapper singleton in test env
+  - can either set test env to connect to nats server
+    - not ideal, can't assume we always have a running nats event bus
+  - or fake it out with a mock wrapper in Jest
+- Mocking Imports with Jest
+  - find the file you wanna fake
+  - in the same directory, create a folder called `__mocks__`
+  - in that folder, create a file with identical name to target file
+  - write fake implementation
+  - tell jest to use fake file in test file
+  - `jest.fn()` will internally keep track of the number of times it was invoked and the arguments provided
+    - \_isMockFunction: true,
+    - getMockImplementation: [Function (anonymous)],
+    - mock: [Getter/Setter],
+    - mockClear: [Function (anonymous)],
+    - mockReset: [Function (anonymous)],
+    - mockRestore: [Function (anonymous)],
+    - mockReturnValueOnce: [Function (anonymous)],
+    - mockResolvedValueOnce: [Function (anonymous)],
+    - mockRejectedValueOnce: [Function (anonymous)],
+    - mockReturnValue: [Function (anonymous)],
+    - mockResolvedValue: [Function (anonymous)],
+    - mockRejectedValue: [Function (anonymous)],
+    - mockImplementationOnce: [Function (anonymous)],
+    - mockImplementation: [Function (anonymous)],
+    - mockReturnThis: [Function (anonymous)],
+    - mockName: [Function (anonymous)],
+    - getMockName: [Function (anonymous)]
 
 Code Sharing and Reuse Between Services
 
@@ -961,6 +989,10 @@ Code Sharing and Reuse Between Services
   - adjust heartbeat values in k8s deployment
   - override SIGINT and SIGTERM with `stan.close()` to override default waiting behavior
     - NATS will wait for client to restart which can cause delays in event reprocessing
+- use name of pod as client id in k8s environment variable
+  - when spinning up multiple listeners, allows each to have unique name
+  - useful for checking logs of each listener pod
+    - eg: `name: NATS_CLIENT_ID valueFrom: fieldRef: fieldPath: metadata.name`
 - **core concurrency issues**
 
   - listener can fail to process the event
@@ -986,13 +1018,24 @@ Code Sharing and Reuse Between Services
         - DeliverAllAvailble: gets all events emitted in the past
         - setDurableName: keep track of all events that have gone to that subscription
         - queue group ensures NATS will not dump the durablename subscription and that events only go to one instance of service
+
 - Typescript getters: get accessors
   - throw an error if someone tries to access a NATS client variable before it's been connected
   - `get client() { ...code }`, access NATS client by using `client()` property
   - when calling in another file, no need to invoke with `()`
   - its not a function we call, its a function that defines the property on the instanec
     - `new SomePublisherClass(natsWrapper.client)`
+- handling publish failures
 
+  - whenever we save record to DB, immediately emit event (publish)...
+  - rather than emit, instead save event to events collection DB
+    - triggers a publish to NATS, which updates events collection DB flag
+  - this 2 stage approach helps in multiple ways
+    - if theres an issue connecting to DB, it won't save transaction or event
+    - if nats is down, can still save transaction and event, and publish to NATS later
+      - solves issue where we save a record and fail to publish
+  - however, need to make sure that if transaction is saved but event collection is not, or visa versa, it rolls back transaction
+    - wrap them in a 'db transaction', where if one fails they all fail
 
 - alternatives with cross language support, if using multiple languages across services
   - JSON Schema
