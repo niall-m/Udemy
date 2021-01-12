@@ -424,6 +424,9 @@ Integrating React App into K Cluster with load balancer service
             - `schema.statics.methodName`
             - accomplishes the same thing but adds the type checks to the Model, removes superfluous exports
             - need to tell TS about the static function added to the model with another interface
+          - basically, `statics` is how we add a new method to the model
+            - to add a new method to the *document*, use `methods`
+              - `schema.methods.myMethod = function() {}`
       - NB
         - m user model represents entire collection of models
         - m user document represents one single user
@@ -443,6 +446,14 @@ Integrating React App into K Cluster with load balancer service
               - uses `function` instead of fat arrow
                 - with middleware function, we have access to the document being saved as `this`
                 - fat arrow function binds the context of `this` to the enveloping scope which we don't want
+  - associate two different documents/records together, 2 primary strategies
+    - option #1 - embedding 
+      - eg embed the ticket data in the order
+      - querying is a bit challenging
+      - where do we put an unreserved ticket?
+    - option #2 - mongoose ref/population feature 
+      - create a *collection* of each document
+        - each new doc can optionally have a reference to the other collection
 - Authentication Strategies: _are they logged in?_
   - user auth with microservices is an unsolved problem, there are many ways to do it, no one right way
   - Option **#1**
@@ -777,6 +788,8 @@ Express notes
     - with TS we'll have to subclass custom errors
       - set prototype when extending a class in TS thats built into the language, e.g. Error
         - `Object.setPrototypeOf(this, ClassName.prototype);`
+  - custom validation for mongoose id in request body
+    - `.custom((input: string) => mongoose.Types.ObjectId.isValid(input))`
 - [express-async-errors](https://www.npmjs.com/package/express-async-errors)
   - changes the default behavior of how express handles route handlers
   - implements `await` on any `async` function
