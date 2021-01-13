@@ -425,7 +425,7 @@ Integrating React App into K Cluster with load balancer service
             - accomplishes the same thing but adds the type checks to the Model, removes superfluous exports
             - need to tell TS about the static function added to the model with another interface
           - basically, `statics` is how we add a new method to the model
-            - to add a new method to the *document*, use `methods`
+            - to add a new method to the _document_, use `methods`
               - `schema.methods.myMethod = function() {}`
       - NB
         - m user model represents entire collection of models
@@ -447,12 +447,12 @@ Integrating React App into K Cluster with load balancer service
                 - with middleware function, we have access to the document being saved as `this`
                 - fat arrow function binds the context of `this` to the enveloping scope which we don't want
   - associate two different documents/records together, 2 primary strategies
-    - option #1 - embedding 
+    - option #1 - embedding
       - eg embed the ticket data in the order
       - querying is a bit challenging
       - where do we put an unreserved ticket?
-    - option #2 - mongoose ref/population feature 
-      - create a *collection* of each document
+    - option #2 - mongoose ref/population feature
+      - create a _collection_ of each document
         - each new doc can optionally have a reference to the other collection
 - Authentication Strategies: _are they logged in?_
   - user auth with microservices is an unsolved problem, there are many ways to do it, no one right way
@@ -993,6 +993,8 @@ Code Sharing and Reuse Between Services
   - subscription joins queue group, second argument to `subscribe` is name of q group
   - when event comes into channel, nats sends event to only one member of the group
   - can still have other services that are not a member of the queue group, but are still listening to the channel
+  - must be unique for all the different services that will create subscriptions inside the channel
+    - must stay consistent over time
 - client health checks
   - to check missing events and logs, port forward monitoring service
   - `kubectl port-forward nats-depl-594c9945f6-2cffp 8222:8222`
