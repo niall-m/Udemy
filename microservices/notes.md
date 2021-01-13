@@ -767,6 +767,12 @@ Typescript
   - `declare global { namespace Express { interface Request { customOptionalParameter?: CustomType }}}`
 - [readonly modifier](https://www.typescriptlang.org/docs/handbook/classes.html#readonly-modifier)
   - like `final` in java, makes sure a given property does not get changed
+- Typescript getters: get accessors
+  - throw an error if someone tries to access a NATS client variable before it's been connected
+  - `get client() { ...code }`, access NATS client by using `client()` property
+  - when calling in another file, no need to invoke with `()`
+  - its not a function we call, its a function that defines the property on the instanec
+    - `new SomePublisherClass(natsWrapper.client)`
 
 Express notes
 
@@ -1012,9 +1018,10 @@ Code Sharing and Reuse Between Services
 
   - listener can fail to process the event
   - one listener runs more quickly than another
+    - events get processed out of order
   - NATS might think a client is still alive when it is dead
   - we might receive the same event twice
-    - NB: these thing shappen with sync communication and monolith style apps too, not just async
+    - NB: these things happen with sync communication and monolith style apps too, not just async
   - solutions that will not work
     - limit to just one service
       - creates bottleneck and can still fail regardless
@@ -1033,13 +1040,28 @@ Code Sharing and Reuse Between Services
         - DeliverAllAvailble: gets all events emitted in the past
         - setDurableName: keep track of all events that have gone to that subscription
         - queue group ensures NATS will not dump the durablename subscription and that events only go to one instance of service
+    - recap: versioning records to avoid concurrency issues when emitting events (rapidly)
+      - first time record is saved to db, version parameter is initiated to 1
+        - any updates to that record increments the version num by 1
+      - event is processed: record saved to db, then event published to listening services
+      - consuming service (with its own db), looks into db for eventId, then compares version number
+      - if event version is not equal to db version + 1, listener will time out because `msg.ack()` is not called
+        - nats-streaming-server will reemit event after 5 (customizable) seconds
+        - hopefully, the missing event will be processed within that time frame
+    - mongoose and mongodb can manage all the version stuff automatically
+      - [optimistic concurrency control](https://en.wikipedia.org/wiki/Optimistic_concurrency_control)
+      - [mongoose-update-if-current](https://www.npmjs.com/package/mongoose-update-if-current)
+        - updates 'version' field of document automatically
+        - "Default behaviour is to use the schema's version key (\_\_v by default) to implement concurrency control"
+          - `__v` is one of the properties listed in the mongoose.Document interface
+          - instead, we'll configure it to use our own _version_ field
+            - by adding `version` to doc interface
+            - `ticketSchema.set('versionKey', 'version');`
+            - `ticketSchema.plugin(updateIfCurrentPlugin);`
+      - include id _and_ the version num in request to find and _update_ a record in db
+        - when should we increment the 'version' number of a record with an event?
+          - whenever the **primary service responsible for a record** emits an event to describe a **create/update/destroy** to a record
 
-- Typescript getters: get accessors
-  - throw an error if someone tries to access a NATS client variable before it's been connected
-  - `get client() { ...code }`, access NATS client by using `client()` property
-  - when calling in another file, no need to invoke with `()`
-  - its not a function we call, its a function that defines the property on the instanec
-    - `new SomePublisherClass(natsWrapper.client)`
 - handling publish failures
 
   - whenever we save record to DB, immediately emit event (publish)...
