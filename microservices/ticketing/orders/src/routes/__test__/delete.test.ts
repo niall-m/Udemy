@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import request from 'supertest';
 import { app } from '../../app';
 import { Ticket } from '../../models/ticket';
@@ -8,6 +9,7 @@ it('marks an order as canceled', async () => {
   // create user and a ticket with Ticket model
   const user = global.getAuthCookie();
   const ticket = Ticket.build({
+    id: mongoose.Types.ObjectId().toHexString(),
     title: 'concert',
     price: 20
   });
@@ -36,6 +38,7 @@ it('marks an order as canceled', async () => {
 it('emits an order cancelled event', async () => {
   const user = global.getAuthCookie();
   const ticket = Ticket.build({
+    id: mongoose.Types.ObjectId().toHexString(),
     title: 'concert',
     price: 20
   });

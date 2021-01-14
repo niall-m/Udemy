@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import request from 'supertest';
 import { app } from '../../app';
 import { Ticket } from '../../models/ticket';
@@ -6,6 +7,7 @@ it('fetches the order', async () => {
   // create a ticket and user
   const user = global.getAuthCookie();
   const ticket = Ticket.build({
+    id: mongoose.Types.ObjectId().toHexString(),
     title: 'concert',
     price: 20
   });
@@ -31,6 +33,7 @@ it('fetches the order', async () => {
 it('returns an error if user tries to fetch orders from different user', async () => {
   const user = global.getAuthCookie();
   const ticket = Ticket.build({
+    id: mongoose.Types.ObjectId().toHexString(),
     title: 'concert',
     price: 20
   });
