@@ -1061,6 +1061,7 @@ Code Sharing and Reuse Between Services
       - include id _and_ the version num in request to find and _update_ a record in db
         - when should we increment the 'version' number of a record with an event?
           - whenever the **primary service responsible for a record** emits an event to describe a **create/update/destroy** to a record
+      - sync replicated data (eg version) across services by publishing the event from the listeners
 
 - handling publish failures
 
