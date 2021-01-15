@@ -1082,3 +1082,36 @@ Code Sharing and Reuse Between Services
     - a way to serialize info, like JSON, but more compact format
   - Apache Avro
     - themed around java, support for other langs as well
+
+expiration options
+
+- 1: timer stored in memory
+  - `setTimeout(() => ...15min ... publish expiration event)`
+    - if service restarts, all timers are lost, gg
+- 2: rely on NATS redelivery mechanism
+  - setup listener for 'order:created', every time that event is published, check if expiredAt time has passed
+    - if passed, emit expiration:complete event
+    - if not passed, don't ack() msg, NATS will keep redelivering
+  - pretty big downside for analytics
+    - monitoring logs for failing events and the amount of times they get redelivered is a good strategy to find broken features
+      - relying on redelivery mechanism for logs and logic no es muy bueno
+- 3: scheduled message/event: broker waits to publish message
+  - expiration service emits event as soon as order:created is received
+  - however, event bus delays the publish for 15 min (or however long)
+    - wouldn't even need an extra service, any service could expire event themselves 
+    - not supported by NATS
+- 4: Bull JS
+  - library for setting up long lived timers and eventually give self notifications
+  - general purpose framework for storing some data, do some processing and scheduling on it
+  - store a list of jobs in **Redis**, in-memory server
+- [redis image on docker](https://hub.docker.com/_/redis)
+  - redis uses port 6379 by default 
+- Bull and Redis
+  - when request comes into server, bull enqueues a 'job'
+    - job = plain javascript object describing some processing needed to be done on something
+  - bull adds job to *queue*, sends job to redis server
+  - redis stores list of jobs
+  - worker servers (also running Bull) keep pulling from the redis server, waiting for a job to appear
+    - they process then send a message back to redis saying job complete
+    - queue processing
+  - bull sets up initial job, processes it, sends back notification
