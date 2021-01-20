@@ -229,7 +229,7 @@
   - `kubectl exec -it [pod_name] [cmd]`
     - soon to be deprecated; use `kubectl exec [POD] -- [COMMAND]` instead
     - execut the given command in a running pod
-  - `kubectl logs [pod_name`
+  - `kubectl logs [pod_name]`
     - print out logs from the given pod
   - `kubectl delete pod [pod_name]`
     - deletes the given pod
@@ -342,6 +342,10 @@ Integrating React App into K Cluster with load balancer service
             - requires addition to annotations
         - for SPA react app using router, default path in `paths` (last path) use wildcard
           - matches any path to always show react app, like `/` in react router
+    - if kubernetes randomly decides to destroy all your resources (e.g. ingress-nginx or k8s secrets)
+      - may have to reinstall [nginx ingress controller](https://kubernetes.github.io/ingress-nginx/deploy/)
+      - may have to update `ingress-srv.yaml` file
+      - recreate secrets (search below)
 
 - [skaffold.dev](https://skaffold.dev/)
   - config runs outside of our cluster, not consumed by k8s
@@ -880,6 +884,7 @@ Testing
     - mockRejectedValueOnce: [Function (anonymous)],
     - mockReturnValue: [Function (anonymous)],
     - mockResolvedValue: [Function (anonymous)],
+      - resolve promises to some custom value
     - mockRejectedValue: [Function (anonymous)],
     - mockImplementationOnce: [Function (anonymous)],
     - mockImplementation: [Function (anonymous)],
@@ -1098,20 +1103,55 @@ expiration options
 - 3: scheduled message/event: broker waits to publish message
   - expiration service emits event as soon as order:created is received
   - however, event bus delays the publish for 15 min (or however long)
-    - wouldn't even need an extra service, any service could expire event themselves 
+    - wouldn't even need an extra service, any service could expire event themselves
     - not supported by NATS
 - 4: Bull JS
   - library for setting up long lived timers and eventually give self notifications
   - general purpose framework for storing some data, do some processing and scheduling on it
   - store a list of jobs in **Redis**, in-memory server
 - [redis image on docker](https://hub.docker.com/_/redis)
-  - redis uses port 6379 by default 
+  - redis uses port 6379 by default
 - Bull and Redis
   - when request comes into server, bull enqueues a 'job'
     - job = plain javascript object describing some processing needed to be done on something
-  - bull adds job to *queue*, sends job to redis server
+  - bull adds job to _queue_, sends job to redis server
   - redis stores list of jobs
   - worker servers (also running Bull) keep pulling from the redis server, waiting for a job to appear
     - they process then send a message back to redis saying job complete
     - queue processing
   - bull sets up initial job, processes it, sends back notification
+
+STRIPE
+
+- node js stripe sdk, api for handling real credit card payments
+  - dialog/modal created and handled by Stripe JS library
+  - stripejs lib runs in browser, collects cc details in modal, sends to stripe api
+  - api sends back auth token
+    - token received back in browser is basically pre-authorization, allows followup request for charge
+  - stripejs hands off token to our js code, we take and submit that token in payments service
+  - payments service takes token, validates order, then makes request to stripe api with token and apiKey
+    - creates a _charge_ ie payment
+  - account defaults to test mode upon creation
+    - while in test mode, use test token, always creates successful charge
+      - `"token": "tok_visa"`
+- install stripe `npm install stripe`
+- sign up for [stripe](https://stripe.com/) to get api key
+- stripe [docs](https://stripe.com/docs/api)
+- create secret key in kubernetes
+  - `kubectl create secret generic <secret-name> --from-literal <KEY_NAME>=<value>`
+  - assign key in k8s to payments pod
+  - ```
+    env:
+    - name: STRIPE_KEY
+      valueFrom:
+        secretKeyRef:
+          name: stripe-secret
+          key: STRIPE_KEY
+    ```
+- import, instantiate and export a copy of the Stripe library,
+  - takes 2 arguments, api key and options config object
+  - `export const stripe = new Stripe(process.env.STRIPE_KEY!, { apiVersion: '2020-03-02' });`
+    - use bang! cuz ts can't verify the env variable
+- create a [charge object](https://stripe.com/docs/api/charges)
+  - NB: _amount_ property is in smallest denomination of currency (e.g. cents in USD)
+    - must multiply price by 100 to convert to dollars
