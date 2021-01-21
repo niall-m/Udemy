@@ -585,6 +585,10 @@ Integrating React App into K Cluster with load balancer service
   - route inside a nextJS project via `pages` directory
     - nextjs interprets filenames in the _pages_ directory as distinct routes within the app
     - uses `index.js` as root route
+    - to use wildcards in url for a _show_ page
+      - wrap name of query parameter in corresponding page file with brackets
+        - eg `/tickets/[ticketId].js`
+      - will be able to receive that parameter inside of component
   - to startup a next project, add script to run `next` in package.json
   - to run inside kubernetes cluster, build image Dockerfile and deployment
     - for local cluster, tag and push image
