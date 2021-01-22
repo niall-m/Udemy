@@ -1176,3 +1176,9 @@ STRIPE
   - basically inject like a react component
   - required: strip key and callback fn to token prop that
     - invoked whenever user submits payment and receives token back
+- regarding custom hook, merging calltime args with api params
+  - `doRequest = async (props = {}) => {`
+    - `await axios[method](url, { ...body, ...props })`
+  - event handlers will pass referenced function the event object as first arg
+    - cannot merge event object into api body params, bypass with callback
+      - `onClick={doRequest}` => `onClick={() => doRequest()}`
