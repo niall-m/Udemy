@@ -585,10 +585,6 @@ Integrating React App into K Cluster with load balancer service
   - route inside a nextJS project via `pages` directory
     - nextjs interprets filenames in the _pages_ directory as distinct routes within the app
     - uses `index.js` as root route
-    - to use wildcards in url for a _show_ page
-      - wrap name of query parameter in corresponding page file with brackets
-        - eg `/tickets/[ticketId].js`
-      - will be able to receive that parameter inside of component
   - to startup a next project, add script to run `next` in package.json
   - to run inside kubernetes cluster, build image Dockerfile and deployment
     - for local cluster, tag and push image
@@ -617,6 +613,8 @@ Integrating React App into K Cluster with load balancer service
     - render each component with data from 'getInitialProps' _one time_
       - provided as a prop to component
     - assemble HTML from all components, send back response
+    - NB: dear god don't forget the slash in api requests from the browser, to avoid a bizarre 504 ECONNRESET
+      - `/api/whatever`, not `api/whatever`
   - `Error: connect ECONNREFUSED 127.0.0.1:80`
     - /etc/hosts file points ticketing.dev to ip (127.0.0.1), default port 80
       - this port/ip is bound to ingress nginx, which routes to client application (nextJs)
@@ -683,8 +681,21 @@ Integrating React App into K Cluster with load balancer service
             - navigating from one page to another while in the app
   - `Link`, custom component developed by NextJS
     - doesn't create anchor tag for you... create your own!
+      - NextJS automatically takes href provided to Link and assign to underlying anchor element
     - trick for conditionally showing links in header.js
       - make array of objects or null, filter out null, map objects into react html
+  - to use wildcards in url for a _show_ page
+    - wrap name of query parameter in corresponding page file with brackets
+      - eg `/tickets/[ticketId].js`
+    - will be able to receive that parameter inside of component
+    - routing to wildcard with Link is tricky
+      - in href prop, put path to file we want to show inside pages dir
+      - provide second prop, _as_, where we build real url we want to nav to
+        - `<Link href="/tickets/[ticketId]" as={'/tickets/${ticket.id}'}>`
+      - same with Router.push, provide second argument with literal path
+        - `onSuccess: (order) => Router.push('/orders/[orderId]', '/orders/${order.id}')`
+      - whatever the file is named is assigned to context.query in getInitialProps
+        - `const { ticketId } = context.query;`
 
 Typescript
 
