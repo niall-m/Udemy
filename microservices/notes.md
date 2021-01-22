@@ -696,6 +696,8 @@ Integrating React App into K Cluster with load balancer service
         - `onSuccess: (order) => Router.push('/orders/[orderId]', '/orders/${order.id}')`
       - whatever the file is named is assigned to context.query in getInitialProps
         - `const { ticketId } = context.query;`
+  - [environment variables](https://nextjs.org/docs/basic-features/environment-variables) with nextjs
+    - ".env\*.local should be added to .gitignore, as those files are intended to be ignored. .env.local is where secrets can be stored."
 
 Typescript
 
@@ -1170,3 +1172,7 @@ STRIPE
 - create a [charge object](https://stripe.com/docs/api/charges)
   - NB: _amount_ property is in smallest denomination of currency (e.g. cents in USD)
     - must multiply price by 100 to convert to dollars
+- for react modal, use [react stripe checkout](https://www.npmjs.com/package/react-stripe-checkout)
+  - basically inject like a react component
+  - required: strip key and callback fn to token prop that
+    - invoked whenever user submits payment and receives token back
