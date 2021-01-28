@@ -1,2 +1,3 @@
 node_modules/
 payments/src/test/setupEnv.ts
+.DS_Store

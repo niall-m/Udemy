@@ -1182,3 +1182,122 @@ STRIPE
   - event handlers will pass referenced function the event object as first arg
     - cannot merge event object into api body params, bypass with callback
       - `onClick={doRequest}` => `onClick={() => doRequest()}`
+
+CI/CD with Git, [Github Actions](https://docs.github.com/en/actions), Digital Ocean
+
+- configure git to build and deploy changes to live k8s cluster whenever branch is merged with master
+- events that trigger workflows to handle running tests, build and deploy, etc
+  - e.g. code pushed, pull request created, pull request closed, repo forked, etc
+- on github repo, click 'actions' to get started creating a yaml script
+  - [example for on push or pull_request](https://docs.github.com/en/actions/reference/events-that-trigger-workflows#example-using-a-list-of-events)
+  - create a separate workflow for each service to run simultaneously and cutdown on overall time
+- Mono Repo Approach vs Repo-Per-Service Approach
+  - mono: single git repo to track all changes to all services
+    - vs each service gets its own repo
+      - setting up all the repos and auth keys, separate ci/cd pipelines is too much overhead
+  - on mac, make sure to gitignore `.DS_Store`
+- example github action workflow
+
+```
+name: tests-auth
+
+on:
+  pull_request:
+    paths:
+    - 'auth/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: cd auth && npm install && npm run test:ci
+```
+
+- example github workflow to build and deploy docker image on merging pull requests
+
+```
+name: deploy-auth
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'auth/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: cd auth && docker build -t <docker_username>/auth . // build image
+      - run: docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD // login to docker
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      - run: docker push <docker_username>/auth // push image to docker hub
+      - uses: digitalocean/action-doctl@v2 // authenticate and install doctl into github container
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - run: doctl kubernetes cluster kubeconfig save <cluster_name> // get connection credentials for digital ocean k8s cluster
+      - run: kubectl rollout restart deployment <k8s_deployment_name> // reach into cluster and tell target deployment to restart itself
+```
+
+- example for deployment manifest, to `apply` all yaml files to cluster
+
+```
+name: deploy-manifests
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'infra/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: digitalocean/action-doctl@v2 // authenticate and install doctl into github container
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - run: doctl kubernetes cluster kubeconfig save <cluster_name> // get connection credentials for digital ocean k8s cluster
+      - run: kubectl apply -f infra/k8s // apply all config files in the k8s directory
+```
+
+- github secret: go to repo settings => secrets
+  - reference them in yaml file with above command
+- what happens with deployment
+
+  - workflow runs inside github container
+    - inside container, we install doctl and initialize/authorize with api key
+    - use doctl to fetch context that describes how to connect to cluster running in digital ocean
+    - feed context into kubectl, which comes preinstalled in github container
+
+- digitial ocean notes
+  - authenticating with Doctl
+    - `doctl auth init`
+  - get connection info for new cluster
+    - `doctl kubernetes cluster kubeconfig save <cluster_name>`
+      - sets context to doctl cluster
+  - list all contexts
+    - `kubectl config view`
+  - use a different context
+    - `kubectl config use-context <context_name>`
+  - `DIGITALOCEAN_ACCESS_TOKEN` is special keyword for secret name in github repo secrets
+  - create secrets from the command line, using the digital ocean context
+    - `kubectl create secret generic jwt-secret --from-literal=JWT_KEY=some_random_value`
+  - don't forget to setup ingress-nginx in d.o. cluster
+  - on networking tabs => load balancer tab, automatically created by ingress-nginx
+    - to get access to cluster from browser, buy a domain name and point it at the load balancer ip address
+      - namecheap.com is pretty cheap
+      - use custom DNS and setup names for each shard (cluster node)
+    - configure the domain name, setup an A and CNAME
+- shutdown digital ocean
+  - networking => load balancers => more => destroy
+  - kubernetes => cluster => more => destroy
+- misc
+  - to add in https support, see cert-manager.io
